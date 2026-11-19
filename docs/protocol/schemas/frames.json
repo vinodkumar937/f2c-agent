@@ -1,0 +1,1814 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/f2c-agent/protocol/v1/frames.json",
+  "title": "F2C agent protocol: WebSocket frames",
+  "description": "Every JSON text frame on the /agent WebSocket (spec 1.0-draft, protocol v1). Receivers ignore unknown fields; `additionalProperties` is therefore true everywhere.",
+  "$defs": {
+    "helloOk": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "hello_ok"
+        },
+        "serverId": {
+          "type": "string",
+          "description": "The engine's id for this server. If present and different from the agent's configured server id, the agent logs one warning per session and keeps the session open (implemented in agent and engine, unreleased). Missing, empty, non-string or over-long values are ignored.",
+          "maxLength": 128
+        },
+        "protocol": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional. The session protocol version: min(agent's X-F2C-Protocol, engine's highest), so 1 today. Missing or invalid means 0 (no negotiation). Implemented in agent and engine, unreleased."
+        },
+        "minAgent": {
+          "type": "string",
+          "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+          "description": "Optional. Semver of the oldest agent the engine wants (from its pinned release). An older agent logs one warning per session and keeps running. Build metadata after + is ignored in the comparison."
+        },
+        "caps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional. Engine feature strings. Known: \"notAfter\", \"hardenSummary\" and \"resultCode\" (all live in the unreleased engine at protocol >= 1). Unknown strings are ignored."
+        }
+      },
+      "required": [
+        "t"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "hello_ok",
+          "serverId": "srv_EXAMPLE0000001"
+        },
+        {
+          "t": "hello_ok",
+          "serverId": "srv_EXAMPLE0000001",
+          "protocol": 1,
+          "minAgent": "0.4.0",
+          "caps": [
+            "notAfter",
+            "hardenSummary",
+            "resultCode"
+          ]
+        }
+      ],
+      "description": "engine -> agent. Sent once, right after the upgrade is accepted, before any re-sent cmd. serverId is checked against the configured id (warning only). protocol, minAgent and caps are optional and additive (implemented in agent and engine, unreleased). An agent decodes them tolerantly: a wrong type falls back to protocol 0 / no caps / no check and never drops the frame."
+    },
+    "hbContainer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "hostPort": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Loopback port the container is published on; omitted when 0/unknown."
+        }
+      },
+      "required": [
+        "name",
+        "state",
+        "image",
+        "status"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "myapp",
+          "state": "running",
+          "image": "f2c/myapp:abc123",
+          "status": "Up 3 hours",
+          "hostPort": 20001
+        }
+      ]
+    },
+    "hbUpdate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "succeeded",
+            "rolled_back",
+            "failed"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "at": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "fromVersion": {
+          "type": "string"
+        },
+        "toVersion": {
+          "type": "string"
+        },
+        "rollback": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "at"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "id": "agentupd-lz3k9",
+          "status": "succeeded",
+          "message": "new agent connected to the engine",
+          "from": "0000000000000000000000000000000000000000000000000000000000000000",
+          "to": "1111111111111111111111111111111111111111111111111111111111111111",
+          "at": "2026-11-18T10:00:00Z"
+        }
+      ],
+      "description": "Last self-update outcome (update-result.json); null when none."
+    },
+    "hbHardenRun": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^harden-[a-z0-9]{1,40}$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "succeeded",
+            "failed",
+            "rolled_back",
+            "unknown"
+          ]
+        },
+        "finishedAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "backupId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "id": "harden-abc",
+          "status": "succeeded",
+          "finishedAt": "2026-11-18T10:00:00Z",
+          "backupId": "20261118-100000"
+        }
+      ]
+    },
+    "hbHarden": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "frames.json#/$defs/hbHardenRun"
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "v",
+        "runs"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "v": 1,
+          "runs": [
+            {
+              "id": "harden-abc",
+              "status": "succeeded"
+            }
+          ]
+        }
+      ],
+      "description": "Last 5 harden runs, newest first."
+    },
+    "appUsage": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "cpuPct": {
+          "type": "number"
+        },
+        "cpuLimit": {
+          "type": "number"
+        },
+        "memUsedMb": {
+          "type": "number"
+        },
+        "memLimitMb": {
+          "type": "number"
+        },
+        "diskUsedMb": {
+          "type": "number"
+        },
+        "imageSizeMb": {
+          "type": "number"
+        },
+        "diskMeasuredAt": {
+          "type": "string"
+        },
+        "diskSkipped": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "cgroup",
+            "docker_stats"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "state"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "myapp",
+          "state": "running",
+          "cpuPct": 1.5,
+          "memUsedMb": 120.2,
+          "source": "cgroup"
+        }
+      ]
+    },
+    "accessRow": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "minute": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "s2xx": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "s3xx": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "s4xx": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "s5xx": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p50Ms": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p95Ms": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "host",
+        "minute",
+        "requests",
+        "s2xx",
+        "s3xx",
+        "s4xx",
+        "s5xx",
+        "bytes",
+        "p50Ms",
+        "p95Ms"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "host": "app.example.com",
+          "minute": "2026-11-18T10:00:00Z",
+          "requests": 12,
+          "s2xx": 10,
+          "s3xx": 0,
+          "s4xx": 1,
+          "s5xx": 1,
+          "bytes": 4096,
+          "p50Ms": 3.2,
+          "p95Ms": 40.1
+        }
+      ],
+      "description": "One finished minute of access-log aggregates for one host (extra public-service domains are reported under the parent app's primary host)."
+    },
+    "hb": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "hb"
+        },
+        "agentVersion": {
+          "type": "string"
+        },
+        "agentHash": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{64})?$"
+        },
+        "update": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "frames.json#/$defs/hbUpdate"
+            }
+          ]
+        },
+        "cpuCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "arch": {
+          "type": "string"
+        },
+        "memoryMb": {
+          "type": "number"
+        },
+        "diskGb": {
+          "type": "number"
+        },
+        "cpuPct": {
+          "type": "number"
+        },
+        "memUsedMb": {
+          "type": "number"
+        },
+        "diskUsedGb": {
+          "type": "number"
+        },
+        "containers": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "frames.json#/$defs/hbContainer"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null when `docker ps` failed."
+        },
+        "usageV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "consoleV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "consoleHelperV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "accessV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dockerBuildV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "composeV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "proxyV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hardenV": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "harden": {
+          "$ref": "frames.json#/$defs/hbHarden"
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "$ref": "frames.json#/$defs/appUsage"
+          }
+        },
+        "access": {
+          "type": "array",
+          "items": {
+            "$ref": "frames.json#/$defs/accessRow"
+          }
+        },
+        "updateV": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "1: self_update honours version, rollback and reason (protocol >= 1) and keeps the signed floor. The engine sends those arguments only to agents that report it."
+        }
+      },
+      "required": [
+        "t",
+        "agentVersion",
+        "cpuCount",
+        "arch",
+        "memoryMb",
+        "diskGb",
+        "cpuPct",
+        "memUsedMb",
+        "diskUsedGb",
+        "containers",
+        "usageV",
+        "consoleV",
+        "consoleHelperV",
+        "accessV",
+        "dockerBuildV",
+        "composeV",
+        "proxyV",
+        "hardenV"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "hb",
+          "agentVersion": "0.3.1+202611181227",
+          "agentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "update": null,
+          "cpuCount": 2,
+          "arch": "amd64",
+          "memoryMb": 3900,
+          "diskGb": 80,
+          "cpuPct": 3.1,
+          "memUsedMb": 1200,
+          "diskUsedGb": 20,
+          "containers": [],
+          "usageV": 1,
+          "consoleV": 1,
+          "consoleHelperV": 1,
+          "accessV": 1,
+          "dockerBuildV": 1,
+          "composeV": 1,
+          "proxyV": 1,
+          "hardenV": 1,
+          "harden": {
+            "v": 1,
+            "runs": []
+          },
+          "updateV": 1
+        }
+      ],
+      "description": "agent -> engine. Sent right after connecting and every 15 s. `apps` is present on every 4th beat (starting with the first); `access` only when finished minutes exist; `harden` is omitted if building it fails."
+    },
+    "cmd": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "cmd"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "type": {
+          "type": "string",
+          "description": "Command type. Unknown types are answered with code unknown_command."
+        },
+        "args": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "notAfter": {
+          "$ref": "common.json#/$defs/rfc3339"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "type"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "cmd",
+          "id": "c1",
+          "type": "stop",
+          "args": {
+            "name": "myapp"
+          }
+        },
+        {
+          "t": "cmd",
+          "id": "c2",
+          "type": "rm",
+          "args": {
+            "name": "myapp"
+          },
+          "notAfter": "2026-11-18T10:00:00Z"
+        }
+      ],
+      "description": "engine -> agent. `args` defaults to {}. The currently deployed engine does not send `notAfter` (see open questions)."
+    },
+    "ack": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "ack"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "ack",
+          "id": "c1"
+        }
+      ]
+    },
+    "stream": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "stream"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "data": {
+          "type": "string",
+          "description": "Text (logs, build/load output) or base64 (exec stdout)."
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "data"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "stream",
+          "id": "c1",
+          "data": "2026-11-18T10:00:00.000000000Z listening on :3000\n"
+        }
+      ]
+    },
+    "cancel": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "cancel"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "cancel",
+          "id": "c1"
+        }
+      ]
+    },
+    "result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "result"
+            },
+            "id": {
+              "$ref": "common.json#/$defs/id"
+            },
+            "ok": {
+              "const": true
+            },
+            "data": {},
+            "replayed": {
+              "const": true,
+              "description": "Protocol >= 1 only: this frame is a re-send of the cached result of a finished id (docs 6.3). Absent on the first send."
+            }
+          },
+          "required": [
+            "t",
+            "id",
+            "ok"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "result"
+            },
+            "id": {
+              "$ref": "common.json#/$defs/id"
+            },
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "string"
+            },
+            "code": {
+              "$ref": "common.json#/$defs/resultCode"
+            },
+            "replayed": {
+              "const": true,
+              "description": "Protocol >= 1 only: this frame is a re-send of the cached result of a finished id (docs 6.3). Absent on the first send."
+            }
+          },
+          "required": [
+            "t",
+            "id",
+            "ok",
+            "error"
+          ],
+          "additionalProperties": true
+        }
+      ],
+      "examples": [
+        {
+          "t": "result",
+          "id": "c1",
+          "ok": true,
+          "data": {
+            "stopped": "myapp"
+          }
+        },
+        {
+          "t": "result",
+          "id": "c1",
+          "ok": false,
+          "error": "container myapp not found"
+        },
+        {
+          "t": "result",
+          "id": "c3",
+          "ok": false,
+          "error": "unknown command type \"frobnicate\"",
+          "code": "unknown_command"
+        },
+        {
+          "t": "result",
+          "id": "c3",
+          "ok": false,
+          "error": "unknown command type \"frobnicate\"",
+          "code": "unknown_cmd"
+        },
+        {
+          "t": "result",
+          "id": "c2",
+          "ok": true,
+          "data": {
+            "removed": "myapp",
+            "existed": true
+          },
+          "replayed": true
+        },
+        {
+          "t": "result",
+          "id": "c7",
+          "ok": false,
+          "error": "interrupted: the agent restarted while run was running; it may have partly run, check the state and retry with a new id",
+          "code": "interrupted"
+        }
+      ],
+      "description": "agent -> engine. Final result of a cmd. Failure: `code` is present on every ok:false at protocol >= 1 (resultCodeV1) and only for the eight legacy codes at protocol 0; the error text is the same at both. There is no retryable field."
+    },
+    "rotateToken": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "rotate_token"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "token": {
+          "$ref": "common.json#/$defs/serverToken"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "token"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "rotate_token",
+          "id": "rot-EXAMPLE",
+          "token": "f2cs_EXAMPLE_NOT_A_REAL_TOKEN"
+        }
+      ],
+      "description": "engine -> agent, live connection only."
+    },
+    "tokenRotated": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "token_rotated"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "ok"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "token_rotated",
+          "id": "rot-EXAMPLE",
+          "ok": true
+        },
+        {
+          "t": "token_rotated",
+          "id": "rot-EXAMPLE",
+          "ok": false,
+          "error": "invalid rotation message"
+        }
+      ]
+    },
+    "registryLogin": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "registry_login"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "auths": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 4,
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "auth": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "auth"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "auths"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "config"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "registry_login",
+          "id": "reg-EXAMPLE",
+          "config": {
+            "auths": {
+              "registry.example.com": {
+                "auth": "RVhBTVBMRTpFWEFNUExF"
+              }
+            }
+          }
+        }
+      ],
+      "description": "engine -> agent, live connection only. Docker config.json fragment (max 16 KiB), written 0600 and used only for docker pull."
+    },
+    "registryLoginReply": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "registry_login"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "ok"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "registry_login",
+          "id": "reg-EXAMPLE",
+          "ok": true
+        }
+      ],
+      "description": "agent -> engine. Same `t` as the request (see open questions)."
+    },
+    "dnsToken": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "dns_token"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "digitalocean",
+            "cloudflare",
+            "other"
+          ]
+        },
+        "domain": {
+          "$ref": "common.json#/$defs/hostname"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\r\\n]*$"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "provider",
+        "domain",
+        "token"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "dns_token",
+          "id": "dns-EXAMPLE",
+          "provider": "cloudflare",
+          "domain": "apps.example.com",
+          "token": "EXAMPLE_DNS_API_TOKEN"
+        }
+      ],
+      "description": "engine -> agent, live connection only. The engine only sends digitalocean or cloudflare."
+    },
+    "dnsTokenOk": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "dns_token_ok"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "ok"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "dns_token_ok",
+          "id": "dns-EXAMPLE",
+          "ok": true
+        }
+      ]
+    },
+    "certIssued": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "cert_issued"
+        },
+        "host": {
+          "type": "string"
+        },
+        "issuedAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "expiresAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        }
+      },
+      "required": [
+        "t",
+        "host",
+        "issuedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "cert_issued",
+          "host": "app.example.com",
+          "issuedAt": "2026-11-18T09:00:00Z",
+          "expiresAt": "2027-02-16T09:00:00Z"
+        },
+        {
+          "t": "cert_issued",
+          "host": "wildcard_.apps.example.com",
+          "issuedAt": "2026-11-18T09:00:00Z",
+          "expiresAt": "2027-02-16T09:00:00Z"
+        }
+      ],
+      "description": "agent -> engine. `host` is a certificate name; a wildcard certificate is reported as wildcard_.<domain>."
+    },
+    "consoleOpen": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_open"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "container": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        },
+        "cmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "helperTar": {
+          "$ref": "common.json#/$defs/base64"
+        },
+        "helperDir": {
+          "type": "string",
+          "pattern": "^/tmp/\\.f2c/con_[a-f0-9]{16}$"
+        },
+        "fallbackCmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "container",
+        "cmd"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_open",
+          "id": "con-1",
+          "container": "myapp",
+          "cmd": [
+            "/bin/sh"
+          ],
+          "cols": 80,
+          "rows": 24
+        }
+      ]
+    },
+    "consoleIn": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_in"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "d": {
+          "$ref": "common.json#/$defs/base64"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "d"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_in",
+          "id": "con-1",
+          "d": "bHMK"
+        }
+      ]
+    },
+    "consoleResize": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_resize"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "cols",
+        "rows"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_resize",
+          "id": "con-1",
+          "cols": 120,
+          "rows": 40
+        }
+      ]
+    },
+    "consoleClose": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_close"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_close",
+          "id": "con-1"
+        }
+      ]
+    },
+    "consoleReady": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_ready"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "helper": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "helper"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_ready",
+          "id": "con-1",
+          "helper": false
+        }
+      ]
+    },
+    "consoleOut": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_out"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "d": {
+          "$ref": "common.json#/$defs/base64"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "d"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_out",
+          "id": "con-1",
+          "d": "JCA="
+        }
+      ]
+    },
+    "consoleExit": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "console_exit"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "error",
+            "not_running",
+            "exited"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "reason"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "console_exit",
+          "id": "con-1",
+          "reason": "exited"
+        }
+      ]
+    },
+    "dbSpec": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "postgres",
+            "redis"
+          ]
+        },
+        "orgId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "databaseName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "container": {
+          "type": "string",
+          "description": "Must equal f2c-db-<databaseName>."
+        },
+        "volume": {
+          "type": "string",
+          "description": "Must equal <container>-data."
+        },
+        "user": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "database": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        }
+      },
+      "required": [
+        "generation",
+        "type",
+        "orgId",
+        "databaseName",
+        "container",
+        "volume",
+        "user",
+        "database"
+      ],
+      "additionalProperties": true,
+      "description": "Identity of a managed database, the common args of every db_request (except capabilities, volume_backup_create and volume_backup_offsite) and of db_socket_open. Each operation adds its own arguments (see database.json).",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app"
+        }
+      ]
+    },
+    "dbRequest": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_request"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "type": {
+          "type": "string",
+          "description": "Operation: capabilities, register, backup_list, backup_create, backup_offsite_put, backup_offsite_restore, backup_close, backup_read, restore, upload_start, upload_chunk, upload_finish, upload_abort, delete, volume_backup_create, volume_backup_offsite. Unknown operations fail with code unsupported."
+        },
+        "args": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true,
+          "description": "Operation arguments. Every operation except capabilities, volume_backup_create and volume_backup_offsite carries the dbSpec identity fields plus its own; the per-operation arguments and results are in database.json (`<operation>.args`, `<operation>.result`)."
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "type"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_request",
+          "id": "db-1",
+          "type": "capabilities",
+          "args": {}
+        },
+        {
+          "t": "db_request",
+          "id": "db-2",
+          "type": "backup_list",
+          "args": {
+            "generation": "g1",
+            "type": "postgres",
+            "orgId": "org_EXAMPLE",
+            "databaseName": "db1",
+            "container": "f2c-db-db1",
+            "volume": "f2c-db-db1-data",
+            "user": "app",
+            "database": "app"
+          }
+        }
+      ]
+    },
+    "dbResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "db_result"
+            },
+            "id": {
+              "$ref": "common.json#/$defs/id"
+            },
+            "ok": {
+              "const": true
+            },
+            "data": {}
+          },
+          "required": [
+            "t",
+            "id",
+            "ok"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "db_result"
+            },
+            "id": {
+              "$ref": "common.json#/$defs/id"
+            },
+            "ok": {
+              "const": false
+            },
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z_]{1,64}$"
+            },
+            "status": {
+              "type": "integer",
+              "enum": [
+                400,
+                403,
+                404,
+                409,
+                500
+              ]
+            }
+          },
+          "required": [
+            "t",
+            "id",
+            "ok",
+            "code",
+            "status"
+          ],
+          "additionalProperties": true
+        }
+      ],
+      "examples": [
+        {
+          "t": "db_result",
+          "id": "db-1",
+          "ok": true,
+          "data": {
+            "protocol": 1,
+            "volumeDelete": true,
+            "backups": true,
+            "query": true,
+            "writeQuery": true,
+            "restoreUpload": true,
+            "offsitePut": true,
+            "volumeBackup": true
+          }
+        },
+        {
+          "t": "db_result",
+          "id": "db-2",
+          "ok": false,
+          "code": "operation_busy",
+          "status": 409
+        }
+      ]
+    },
+    "dbSocketOpen": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_socket_open"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "args": {
+          "$ref": "frames.json#/$defs/dbSpec"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "args"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_socket_open",
+          "id": "sock-1",
+          "args": {
+            "generation": "g1",
+            "type": "postgres",
+            "orgId": "org_EXAMPLE",
+            "databaseName": "db1",
+            "container": "f2c-db-db1",
+            "volume": "f2c-db-db1-data",
+            "user": "app",
+            "database": "app"
+          }
+        }
+      ]
+    },
+    "dbSocketIn": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_socket_in"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "d": {
+          "$ref": "common.json#/$defs/base64"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "d"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_socket_in",
+          "id": "sock-1",
+          "d": "AAAA"
+        }
+      ],
+      "description": "`d` is at most 180000 characters."
+    },
+    "dbSocketClose": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_socket_close"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_socket_close",
+          "id": "sock-1"
+        }
+      ]
+    },
+    "dbSocketReady": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_socket_ready"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_socket_ready",
+          "id": "sock-1"
+        }
+      ]
+    },
+    "dbSocketOut": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_socket_out"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "d": {
+          "$ref": "common.json#/$defs/base64"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "d"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_socket_out",
+          "id": "sock-1",
+          "d": "AAAA"
+        }
+      ]
+    },
+    "dbSocketEnd": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "db_socket_end"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "error": {
+          "oneOf": [
+            {
+              "const": true
+            },
+            {
+              "type": "string",
+              "enum": [
+                "operation_busy",
+                "database_not_running",
+                "query_too_large"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "db_socket_end",
+          "id": "sock-1"
+        },
+        {
+          "t": "db_socket_end",
+          "id": "sock-1",
+          "error": "database_not_running"
+        }
+      ]
+    },
+    "engineToAgent": {
+      "description": "Any frame the engine sends to the agent (discriminated by `t`).",
+      "oneOf": [
+        {
+          "$ref": "frames.json#/$defs/helloOk"
+        },
+        {
+          "$ref": "frames.json#/$defs/cmd"
+        },
+        {
+          "$ref": "frames.json#/$defs/cancel"
+        },
+        {
+          "$ref": "frames.json#/$defs/rotateToken"
+        },
+        {
+          "$ref": "frames.json#/$defs/registryLogin"
+        },
+        {
+          "$ref": "frames.json#/$defs/dnsToken"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleOpen"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleIn"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleResize"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleClose"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbRequest"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbSocketOpen"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbSocketIn"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbSocketClose"
+        }
+      ]
+    },
+    "agentToEngine": {
+      "description": "Any frame the agent sends to the engine (discriminated by `t`).",
+      "oneOf": [
+        {
+          "$ref": "frames.json#/$defs/hb"
+        },
+        {
+          "$ref": "frames.json#/$defs/ack"
+        },
+        {
+          "$ref": "frames.json#/$defs/stream"
+        },
+        {
+          "$ref": "frames.json#/$defs/result"
+        },
+        {
+          "$ref": "frames.json#/$defs/tokenRotated"
+        },
+        {
+          "$ref": "frames.json#/$defs/registryLoginReply"
+        },
+        {
+          "$ref": "frames.json#/$defs/dnsTokenOk"
+        },
+        {
+          "$ref": "frames.json#/$defs/certIssued"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleReady"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleOut"
+        },
+        {
+          "$ref": "frames.json#/$defs/consoleExit"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbResult"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbSocketReady"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbSocketOut"
+        },
+        {
+          "$ref": "frames.json#/$defs/dbSocketEnd"
+        }
+      ]
+    },
+    "resultFailureV1": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "result"
+        },
+        "id": {
+          "$ref": "common.json#/$defs/id"
+        },
+        "ok": {
+          "const": false
+        },
+        "error": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "$ref": "common.json#/$defs/resultCodeV1"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "ok",
+        "error",
+        "code"
+      ],
+      "not": {
+        "required": [
+          "data"
+        ]
+      },
+      "additionalProperties": true,
+      "examples": [
+        {
+          "t": "result",
+          "id": "c10",
+          "ok": false,
+          "error": "docker pull: Error response from daemon: pull access denied for nginx, repository does not exist or may require 'docker login'",
+          "code": "image_not_found"
+        },
+        {
+          "t": "result",
+          "id": "c11",
+          "ok": false,
+          "error": "docker run: Bind for 127.0.0.1:20001 failed: port is already allocated",
+          "code": "port_in_use"
+        },
+        {
+          "t": "result",
+          "id": "c12",
+          "ok": false,
+          "error": "caddy admin: Post \"http://127.0.0.1:2019/load\": dial tcp 127.0.0.1:2019: connect: connection refused",
+          "code": "caddy_unavailable"
+        },
+        {
+          "t": "result",
+          "id": "c13",
+          "ok": false,
+          "error": "harden_running: another harden run is still in progress on this agent; nothing changed",
+          "code": "conflict"
+        },
+        {
+          "t": "result",
+          "id": "c14",
+          "ok": false,
+          "error": "build timed out: context deadline exceeded",
+          "code": "timeout"
+        },
+        {
+          "t": "result",
+          "id": "c15",
+          "ok": false,
+          "error": "interrupted: the agent restarted while build was running; it may have partly run, check the state and retry with a new id",
+          "code": "interrupted"
+        }
+      ],
+      "description": "agent -> engine. The shape of every failed result at protocol >= 1: ok:false, the unchanged error text, a code from resultCodeV1, and no data."
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "v": 1,
+  "serial": 2,
+  "keys": [
+    {
+      "id": "d5be90e42c884807",
+      "alg": "ed25519",
+      "pub": "tsixg7qlWB4qdKyXQHQcCaGqcKXF+OCSspPutkGQ8Ts=",
+      "status": "active",
+      "added": "2026-11-18",
+      "note": "release key 1 (the key all releases up to 0.3.1 are signed with)"
+    },
+    {
+      "id": "3d4fe084d4acbab8",
+      "alg": "ed25519",
+      "pub": "DtT/M0nfuu5IPKPm5nxabmlmtRZQ9QKJ3R8HeF+GWsI=",
+      "status": "active",
+      "added": "2026-11-19",
+      "note": "release key 2 (backup key, held separately from key 1; listed from the first release that carries a key list)"
+    }
+  ]
+}

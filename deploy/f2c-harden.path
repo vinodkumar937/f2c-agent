@@ -1,0 +1,13 @@
+# Optional "Harden server" trigger (admin dashboard -> engine -> agent `harden` command).
+# f2c-agent (non-root, NoNewPrivileges=yes, no sudo) writes a validated key=value request into its own state dir;
+# this path unit then starts the root oneshot f2c-harden.service, which reads, re-validates and deletes it.
+# The agent gets no other root capability: it can only ask for dry_run/apply/rollback with checked options.
+[Unit]
+Description=Watch for an F2C harden request from f2c-agent
+
+[Path]
+PathChanged=/var/lib/f2c-agent/harden/request
+Unit=f2c-harden.service
+
+[Install]
+WantedBy=multi-user.target

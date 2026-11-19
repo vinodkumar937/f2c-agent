@@ -1,0 +1,1959 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/f2c-agent/protocol/v1/commands.json",
+  "title": "F2C agent protocol: command arguments and results",
+  "description": "For each command type, `<type>.args` is the schema of the `args` object of the cmd frame and `<type>.result` the schema of `data` in a successful result frame (spec 1.0-draft, protocol v1). Args are validated by the agent as described in the spec; only `run` rejects unknown keys.",
+  "$defs": {
+    "commandType": {
+      "type": "string",
+      "enum": [
+        "pull",
+        "run",
+        "stop",
+        "rm",
+        "logs",
+        "stats",
+        "exec",
+        "caddy_apply",
+        "cert_install",
+        "tls_warm",
+        "http_probe",
+        "build",
+        "load",
+        "image_present",
+        "self_update",
+        "rename",
+        "restart_agent",
+        "network_rm",
+        "volume_rm",
+        "volumes_list",
+        "harden"
+      ],
+      "description": "Every command type the agent accepts (hb capability flags in the spec say which agents know which)."
+    },
+    "pull.args": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "$ref": "common.json#/$defs/imageRef"
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "image": "registry.example.com/team/app:1.2.3"
+        }
+      ]
+    },
+    "pull.result": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "$ref": "common.json#/$defs/imageRef"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "image": "registry.example.com/team/app:1.2.3",
+          "id": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "run.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "image": {
+          "$ref": "common.json#/$defs/imageRef"
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "memoryMb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpus": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Container port; default 3000."
+        },
+        "hostPort": {
+          "type": "integer",
+          "description": "0 (docker chooses) or 20000-29999; must be 0/absent with noPublish."
+        },
+        "network": {
+          "$ref": "common.json#/$defs/f2cName"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "common.json#/$defs/f2cName"
+              },
+              "target": {
+                "type": "string",
+                "pattern": "^/.+",
+                "description": "absolute, clean path other than /; no , : or newline"
+              },
+              "readOnly": {
+                "type": "boolean"
+              },
+              "type": {
+                "const": "volume"
+              }
+            },
+            "required": [
+              "name",
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 8
+        },
+        "cmd": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "labels": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "noPublish": {
+          "type": "boolean"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "health": {
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 32
+            },
+            "shell": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "intervalS": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            },
+            "timeoutS": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "startPeriodS": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3600
+            }
+          },
+          "additionalProperties": false,
+          "description": "Exactly one of cmd or shell is required.",
+          "oneOf": [
+            {
+              "required": [
+                "cmd"
+              ],
+              "not": {
+                "required": [
+                  "shell"
+                ]
+              }
+            },
+            {
+              "required": [
+                "shell"
+              ],
+              "not": {
+                "required": [
+                  "cmd"
+                ]
+              }
+            }
+          ]
+        },
+        "entrypoint": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[0-9a-z_][0-9a-z_.-]{0,31}(:[0-9a-z_][0-9a-z_.-]{0,31})?$"
+        },
+        "workdir": {
+          "type": "string",
+          "pattern": "^/.*",
+          "maxLength": 4096
+        },
+        "readOnly": {
+          "type": "boolean"
+        },
+        "init": {
+          "type": "boolean"
+        },
+        "oneShot": {
+          "type": "boolean"
+        },
+        "stopTimeoutS": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "capProfile": {
+          "const": "stack-v1"
+        },
+        "capAdd": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "CHOWN",
+              "DAC_OVERRIDE",
+              "SETGID",
+              "SETUID"
+            ]
+          },
+          "maxItems": 4,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "image"
+      ],
+      "additionalProperties": false,
+      "description": "Default-deny: any key outside this list makes the command fail (privileged, bind mounts and host networking are named in the error). capAdd needs capProfile; aliases need network.",
+      "examples": [
+        {
+          "name": "myapp",
+          "image": "f2c/myapp:abc123",
+          "env": {
+            "NODE_ENV": "production"
+          },
+          "memoryMb": 512,
+          "cpus": 0.5,
+          "port": 3000,
+          "hostPort": 20001,
+          "network": "f2c-net",
+          "labels": {
+            "f2c.example": "1"
+          }
+        }
+      ]
+    },
+    "run.result": {
+      "type": "object",
+      "properties": {
+        "containerId": {
+          "type": "string"
+        },
+        "hostPort": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Published loopback port; 0 with noPublish."
+        },
+        "caps": {
+          "type": "object",
+          "properties": {
+            "profile": {
+              "type": "string"
+            },
+            "drop": {
+              "type": "string"
+            },
+            "add": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "noNewPrivileges": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "profile",
+            "drop",
+            "add",
+            "noNewPrivileges"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "containerId",
+        "hostPort",
+        "caps"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "containerId": "4f1c2a9b8d7e",
+          "hostPort": 20001,
+          "caps": {
+            "profile": "",
+            "drop": "",
+            "add": [],
+            "noNewPrivileges": false
+          }
+        }
+      ]
+    },
+    "stop.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120,
+          "description": "Seconds; out-of-range values fall back to 10."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "myapp",
+          "timeout": 10
+        }
+      ]
+    },
+    "stop.result": {
+      "type": "object",
+      "properties": {
+        "stopped": {
+          "$ref": "common.json#/$defs/containerName"
+        }
+      },
+      "required": [
+        "stopped"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "stopped": "myapp"
+        }
+      ]
+    },
+    "rm.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "common.json#/$defs/containerName"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "myapp"
+        }
+      ]
+    },
+    "rm.result": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "existed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed",
+        "existed"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "removed": "myapp",
+          "existed": true
+        }
+      ]
+    },
+    "logs.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "tail": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "description": "Default 100."
+        },
+        "follow": {
+          "type": "boolean"
+        },
+        "followSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Default 30; only with follow."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "myapp",
+          "tail": 100,
+          "follow": true,
+          "followSeconds": 30
+        }
+      ]
+    },
+    "logs.result": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "followed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "lines",
+        "bytes",
+        "followed"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "lines": 100,
+          "bytes": 8123,
+          "followed": true
+        }
+      ]
+    },
+    "stats.args": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "detail": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true,
+      "examples": [
+        {
+          "names": [
+            "myapp"
+          ],
+          "detail": true
+        }
+      ]
+    },
+    "stats.result": {
+      "type": "object",
+      "properties": {
+        "containers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "hostPort": {
+                "type": "integer"
+              },
+              "cpuPct": {
+                "type": "string"
+              },
+              "memUsage": {
+                "type": "string"
+              },
+              "health": {
+                "type": "string"
+              },
+              "restarts": {
+                "type": "integer"
+              },
+              "exitCode": {
+                "type": "integer"
+              },
+              "startedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "state"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "containers"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "containers": [
+            {
+              "name": "myapp",
+              "state": "running",
+              "image": "f2c/myapp:abc123",
+              "status": "Up 3 hours",
+              "cpuPct": "0.50%",
+              "memUsage": "120MiB / 512MiB",
+              "health": "healthy",
+              "restarts": 0,
+              "exitCode": 0,
+              "startedAt": "2026-11-18T07:00:00Z"
+            },
+            {
+              "name": "gone",
+              "state": "missing"
+            }
+          ]
+        }
+      ]
+    },
+    "exec.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "cmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "description": "Default 600."
+        }
+      },
+      "required": [
+        "name",
+        "cmd"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "f2c-db-db1",
+          "cmd": [
+            "pg_dump",
+            "--version"
+          ],
+          "timeoutSeconds": 60
+        }
+      ]
+    },
+    "exec.result": {
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": "integer"
+        },
+        "stdoutBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stderr": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "encoding": {
+          "const": "base64"
+        }
+      },
+      "required": [
+        "exitCode",
+        "stdoutBytes",
+        "stderr",
+        "encoding"
+      ],
+      "additionalProperties": true,
+      "description": "A non-zero exitCode is still ok:true.",
+      "examples": [
+        {
+          "exitCode": 0,
+          "stdoutBytes": 24,
+          "stderr": "",
+          "encoding": "base64"
+        }
+      ]
+    },
+    "caddy_apply.args": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true,
+          "description": "A complete Caddy JSON config; loaded atomically."
+        },
+        "hosts": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "common.json#/$defs/hostname"
+              },
+              "maxItems": 10000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Replaces the /tls/ask allow-list; absent or null leaves it unchanged."
+        },
+        "wildcard": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "domain": {
+                  "$ref": "common.json#/$defs/hostname"
+                },
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "digitalocean",
+                    "cloudflare",
+                    "other"
+                  ]
+                }
+              },
+              "required": [
+                "domain",
+                "provider"
+              ],
+              "additionalProperties": true
+            }
+          ]
+        },
+        "issuanceBlocked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Registered domains at the Let's Encrypt cap (invalid entries are skipped; absent clears the list)."
+        }
+      },
+      "required": [
+        "config"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "config": {
+            "apps": {
+              "http": {
+                "servers": {
+                  "srv0": {
+                    "listen": [
+                      ":80"
+                    ],
+                    "routes": [
+                      {
+                        "@id": "app-myapp",
+                        "match": [
+                          {
+                            "host": [
+                              "myapp.example.com"
+                            ]
+                          }
+                        ],
+                        "handle": [
+                          {
+                            "handler": "reverse_proxy",
+                            "upstreams": [
+                              {
+                                "dial": "127.0.0.1:20001"
+                              }
+                            ]
+                          }
+                        ],
+                        "terminal": true
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "hosts": [
+            "myapp.example.com"
+          ],
+          "wildcard": null,
+          "issuanceBlocked": []
+        }
+      ]
+    },
+    "caddy_apply.result": {
+      "type": "object",
+      "properties": {
+        "applied": {
+          "const": true
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hosts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wildcard": {
+          "type": "string",
+          "description": "The wildcard subject applied (\"*.<domain>\") or an empty string."
+        }
+      },
+      "required": [
+        "applied",
+        "bytes",
+        "hosts",
+        "wildcard"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "applied": true,
+          "bytes": 512,
+          "hosts": 1,
+          "wildcard": ""
+        }
+      ]
+    },
+    "cert_install.args": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "pattern": "^(\\*\\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+        },
+        "certPem": {
+          "type": "string"
+        },
+        "keyPem": {
+          "type": "string",
+          "description": "Private key PEM; secret."
+        }
+      },
+      "required": [
+        "domain",
+        "certPem",
+        "keyPem"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "domain": "*.apps.example.com",
+          "certPem": "-----BEGIN CERTIFICATE-----\nEXAMPLE\n-----END CERTIFICATE-----\n",
+          "keyPem": "-----BEGIN PRIVATE KEY-----\nEXAMPLE\n-----END PRIVATE KEY-----\n"
+        }
+      ]
+    },
+    "cert_install.result": {
+      "type": "object",
+      "properties": {
+        "certPath": {
+          "type": "string"
+        },
+        "keyPath": {
+          "type": "string"
+        },
+        "notAfter": {
+          "$ref": "common.json#/$defs/rfc3339"
+        }
+      },
+      "required": [
+        "certPath",
+        "keyPath",
+        "notAfter"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "certPath": "/var/lib/f2c-agent/certs/_wildcard.apps.example.com.crt",
+          "keyPath": "/var/lib/f2c-agent/certs/_wildcard.apps.example.com.key",
+          "notAfter": "2027-02-16T09:00:00Z"
+        }
+      ]
+    },
+    "tls_warm.args": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "$ref": "common.json#/$defs/hostname"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "host": "app.example.com"
+        }
+      ]
+    },
+    "tls_warm.result": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "attempts"
+      ],
+      "additionalProperties": true,
+      "description": "Failure is still ok:true at the frame level, with data.ok false.",
+      "examples": [
+        {
+          "ok": true,
+          "status": 200,
+          "issuer": "CN=R11,O=Let's Encrypt,C=US",
+          "attempts": 1
+        },
+        {
+          "ok": false,
+          "error": "tls: handshake failure",
+          "attempts": 2
+        }
+      ]
+    },
+    "http_probe.args": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "$ref": "common.json#/$defs/hostname"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/[\\x21-\\x7e]{0,511}$",
+          "description": "Default /."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Default 80."
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "host": "myapp.example.com",
+          "path": "/healthz",
+          "port": 80
+        }
+      ]
+    },
+    "http_probe.result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 100
+            },
+            "ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "status",
+            "ms"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": 0
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "error"
+          ],
+          "additionalProperties": true
+        }
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "ms": 4
+        },
+        {
+          "status": 0,
+          "error": "dial tcp 127.0.0.1:80: connect: connection refused"
+        }
+      ]
+    },
+    "build.args": {
+      "type": "object",
+      "properties": {
+        "artifactUrl": {
+          "$ref": "common.json#/$defs/httpsUrl"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One-time context token; secret."
+        },
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "app": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+        },
+        "maxBytes": {
+          "type": "integer",
+          "description": "Capped at 500 MiB."
+        },
+        "timeoutS": {
+          "type": "integer",
+          "description": "Default 30 min, max 2 h."
+        },
+        "uploadUrl": {
+          "$ref": "common.json#/$defs/httpsUrl"
+        },
+        "uploadToken": {
+          "type": "string"
+        },
+        "uploadMaxBytes": {
+          "type": "integer"
+        },
+        "buildCmd": {
+          "type": "string"
+        },
+        "startCmd": {
+          "type": "string"
+        },
+        "outputDir": {
+          "type": "string"
+        },
+        "buildPack": {
+          "type": "string",
+          "enum": [
+            "nixpacks",
+            "static",
+            "dockerfile"
+          ],
+          "description": "'nixpacks' selects the railpack builder (legacy name); requires dockerBuildV for 'dockerfile'."
+        },
+        "dockerfileLocation": {
+          "type": "string"
+        },
+        "dockerTargetBuild": {
+          "type": "string"
+        },
+        "noCache": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "artifactUrl",
+        "token",
+        "sha256",
+        "app",
+        "tag"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "artifactUrl": "https://engine.example.com/agent/context/srv_EXAMPLE/job1",
+          "token": "EXAMPLE_ONE_TIME_TOKEN",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "app": "myapp",
+          "tag": "abc123",
+          "buildPack": "nixpacks"
+        }
+      ]
+    },
+    "build.result": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "buildkitHost": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contextBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected": {},
+        "exposedPorts": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "exportBytes": {
+          "type": "integer"
+        },
+        "exportSha256": {
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "logTail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "image",
+        "id",
+        "tool",
+        "durationMs"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "image": "f2c/myapp:abc123",
+          "id": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "tool": "railpack",
+          "buildkitHost": "docker-container://f2c-buildkit",
+          "durationMs": 42000,
+          "contextBytes": 123456,
+          "logTail": "built"
+        }
+      ]
+    },
+    "load.args": {
+      "type": "object",
+      "properties": {
+        "artifactUrl": {
+          "$ref": "common.json#/$defs/httpsUrl"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "image": {
+          "$ref": "common.json#/$defs/f2cImage"
+        },
+        "imageId": {
+          "$ref": "common.json#/$defs/imageId"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967296
+        }
+      },
+      "required": [
+        "artifactUrl",
+        "token",
+        "sha256",
+        "image",
+        "size"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "artifactUrl": "https://engine.example.com/agent/transfer/srv_EXAMPLE/job1",
+          "token": "EXAMPLE_ONE_TIME_TOKEN",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "image": "f2c/myapp:abc123",
+          "imageId": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "size": 1048576
+        }
+      ]
+    },
+    "load.result": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "image",
+        "id",
+        "durationMs"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "image": "f2c/myapp:abc123",
+          "id": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "bytes": 1048576,
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "durationMs": 900
+        },
+        {
+          "image": "f2c/myapp:abc123",
+          "id": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "skipped": true,
+          "durationMs": 3
+        }
+      ]
+    },
+    "image_present.args": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "$ref": "common.json#/$defs/f2cImage"
+        },
+        "imageId": {
+          "$ref": "common.json#/$defs/imageId"
+        }
+      },
+      "additionalProperties": true,
+      "description": "Both optional. With image and imageId: is that image ID present, and if so tag it as image. With only imageId: presence check.",
+      "examples": [
+        {
+          "image": "f2c/myapp:abc123",
+          "imageId": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "image_present.result": {
+      "type": "object",
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "present",
+        "id"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "present": true,
+          "id": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "self_update.args": {
+      "type": "object",
+      "properties": {
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "version": {
+          "type": "string",
+          "description": "Protocol >= 1 only, sent only to agents that report hb.updateV. The version the engine expects; it must equal the signed '# version' of the release."
+        },
+        "rollback": {
+          "type": "boolean",
+          "description": "Protocol >= 1 only. Allows a downgrade or an older build, with a reason. Never allows going below the persisted signed floor."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Required when rollback is true (bad_request otherwise)."
+        }
+      },
+      "required": [
+        "sha256"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "version": "0.4.0+202611201015"
+        },
+        {
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "version": "0.3.1+202611181227",
+          "rollback": true,
+          "reason": "0.4.0 breaks caddy_apply on arm64"
+        }
+      ]
+    },
+    "self_update.result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "upToDate": {
+              "const": true
+            },
+            "hash": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upToDate",
+            "hash"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "restarting": {
+              "const": true
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "$ref": "common.json#/$defs/sha256"
+            },
+            "fromVersion": {
+              "type": "string",
+              "description": "Protocol >= 1 only: the running version."
+            },
+            "toVersion": {
+              "type": "string",
+              "description": "Protocol >= 1 only: the signed version of the new release; omitted for a release without a signed header."
+            },
+            "rollback": {
+              "type": "boolean",
+              "description": "Protocol >= 1 only."
+            }
+          },
+          "required": [
+            "restarting",
+            "from",
+            "to"
+          ],
+          "additionalProperties": true
+        }
+      ],
+      "examples": [
+        {
+          "upToDate": true,
+          "hash": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "restarting": true,
+          "from": "0000000000000000000000000000000000000000000000000000000000000000",
+          "to": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "restarting": true,
+          "from": "0000000000000000000000000000000000000000000000000000000000000000",
+          "to": "1111111111111111111111111111111111111111111111111111111111111111",
+          "fromVersion": "0.3.1+202611181227",
+          "toVersion": "0.4.0+202611201015",
+          "rollback": false
+        }
+      ]
+    },
+    "rename.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "to": {
+          "$ref": "common.json#/$defs/containerName"
+        }
+      },
+      "required": [
+        "name",
+        "to"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "myapp-next",
+          "to": "myapp"
+        }
+      ]
+    },
+    "rename.result": {
+      "type": "object",
+      "properties": {
+        "renamed": {
+          "$ref": "common.json#/$defs/containerName"
+        },
+        "to": {
+          "$ref": "common.json#/$defs/containerName"
+        }
+      },
+      "required": [
+        "renamed",
+        "to"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "renamed": "myapp-next",
+          "to": "myapp"
+        }
+      ]
+    },
+    "restart_agent.args": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "examples": [
+        {}
+      ]
+    },
+    "restart_agent.result": {
+      "type": "object",
+      "properties": {
+        "restarting": {
+          "const": true
+        }
+      },
+      "required": [
+        "restarting"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "restarting": true
+        }
+      ]
+    },
+    "network_rm.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^f2c-stk-[a-z0-9][a-z0-9_.-]{0,50}$"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "f2c-stk-myapp"
+        }
+      ]
+    },
+    "network_rm.result": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "string"
+        },
+        "existed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed",
+        "existed"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "removed": "f2c-stk-myapp",
+          "existed": true
+        }
+      ]
+    },
+    "volume_rm.args": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^f2c-f2c-[a-z0-9_.-]{0,55}$",
+          "description": "Must be a valid f2c-* name and start with f2c-f2c-."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "f2c-f2c-myapp-data"
+        }
+      ]
+    },
+    "volume_rm.result": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "string"
+        },
+        "existed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed",
+        "existed"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "removed": "f2c-f2c-myapp-data",
+          "existed": true
+        }
+      ]
+    },
+    "volumes_list.args": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "examples": [
+        {}
+      ]
+    },
+    "volumes_list.result": {
+      "type": "object",
+      "properties": {
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "mountpoint": {
+                "type": "string"
+              },
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "appName": {
+                "type": "string"
+              },
+              "appId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "volumes"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "volumes": [
+            {
+              "name": "f2c-f2c-myapp-data",
+              "mountpoint": "/var/lib/docker/volumes/f2c-f2c-myapp-data/_data",
+              "sizeBytes": 4096,
+              "appName": "myapp",
+              "appId": "myapp"
+            }
+          ]
+        }
+      ]
+    },
+    "harden.args": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "pattern": "^harden-[a-z0-9]{1,40}$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "dry_run",
+            "apply",
+            "rollback"
+          ]
+        },
+        "allowIps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "description": "IPv4/IPv6 addresses or CIDRs."
+        },
+        "swapGb": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16,
+          "description": "Default 2."
+        },
+        "sshKeysOnly": {
+          "type": "boolean",
+          "description": "Default true."
+        },
+        "backupId": {
+          "type": "string",
+          "pattern": "^(last|[0-9]{8}-[0-9]{6})$"
+        }
+      },
+      "required": [
+        "runId",
+        "mode"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "runId": "harden-abc123",
+          "mode": "dry_run",
+          "allowIps": [
+            "192.0.2.10",
+            "192.0.2.0/24"
+          ],
+          "swapGb": 2,
+          "sshKeysOnly": true
+        }
+      ]
+    },
+    "harden.result": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "dry_run",
+            "apply",
+            "rollback"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "succeeded",
+            "failed",
+            "rolled_back"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startedAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "finishedAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "backupId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sshKeysPresent": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sshPorts": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prechecks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          }
+        },
+        "postchecks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "description": "Step and check objects come from harden.sh; only the fields below are relied on. Others are passed through."
+          }
+        },
+        "audit": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          }
+        },
+        "replayed": {
+          "const": true,
+          "description": "Present only when the run id was seen before and was not run again."
+        }
+      },
+      "required": [
+        "id",
+        "mode",
+        "status"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "version": 1,
+          "id": "harden-abc123",
+          "mode": "dry_run",
+          "status": "succeeded",
+          "message": null,
+          "startedAt": "2026-11-18T10:00:00Z",
+          "finishedAt": "2026-11-18T10:00:30Z",
+          "backupId": null,
+          "sshKeysPresent": true,
+          "sshPorts": [
+            22
+          ],
+          "warnings": [],
+          "prechecks": [],
+          "postchecks": [],
+          "steps": [],
+          "audit": []
+        },
+        {
+          "version": 1,
+          "id": "harden-abc123",
+          "mode": "apply",
+          "status": "succeeded",
+          "replayed": true
+        }
+      ],
+      "description": "A status of failed or rolled_back reported by the harden script is ok:true with this object at every protocol. Failures the agent detects itself are ok:false with no data at protocol >= 1 (ok:true, status failed at protocol 0)."
+    },
+    "failureCodes": {
+      "description": "Which resultCodeV1 values each command can produce at protocol >= 1, besides the ones every command can (bad_request, cancelled, timeout, internal). Documentation only: the schema constrains the enum, not the pairing.",
+      "type": "object",
+      "properties": {
+        "pull": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "image_not_found",
+              "image_pull_failed",
+              "docker_unavailable",
+              "no_space"
+            ]
+          ]
+        },
+        "run": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "not_allowed",
+              "conflict",
+              "port_in_use",
+              "image_not_found",
+              "image_pull_failed",
+              "docker_unavailable",
+              "no_space",
+              "interrupted"
+            ]
+          ]
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "not_found",
+              "not_allowed",
+              "docker_unavailable"
+            ]
+          ]
+        },
+        "caddy_apply": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "not_allowed",
+              "caddy_unavailable",
+              "caddy_rejected"
+            ]
+          ]
+        },
+        "build": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "transfer_failed",
+              "integrity_failed",
+              "build_failed",
+              "no_space",
+              "dockerfile_not_found",
+              "dockerfile_invalid_path",
+              "dockerfile_invalid_target",
+              "dockerfile_target_not_found",
+              "interrupted"
+            ]
+          ]
+        },
+        "load": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "transfer_failed",
+              "integrity_failed",
+              "build_failed",
+              "build_arch_mismatch",
+              "interrupted"
+            ]
+          ]
+        },
+        "self_update": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "bad_request",
+              "conflict",
+              "not_allowed",
+              "transfer_failed",
+              "integrity_failed",
+              "no_space"
+            ]
+          ]
+        },
+        "harden": {
+          "type": "array",
+          "items": {
+            "$ref": "common.json#/$defs/resultCodeV1"
+          },
+          "examples": [
+            [
+              "harden_not_installed",
+              "harden_bad_request",
+              "harden_state_unreadable",
+              "harden_script_failed",
+              "harden_failed",
+              "harden_interrupted",
+              "harden_timeout",
+              "conflict"
+            ]
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

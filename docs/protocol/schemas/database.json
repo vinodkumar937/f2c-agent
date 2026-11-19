@@ -1,0 +1,1061 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/f2c-agent/protocol/v1/database.json",
+  "title": "F2C agent protocol: managed-database operations",
+  "description": "Arguments and results of the db_request operations (spec 1.0-draft, protocol v1; docs/protocol.md 4.8). Every operation except capabilities, volume_backup_create and volume_backup_offsite takes the dbSpec identity of frames.json plus the arguments below. A failure is a db_result with a code from errorCode and no data.",
+  "$defs": {
+    "backupKey": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{16}\\.dump$",
+      "description": "Name of a dump on the server: UTC time of creation plus 8 random bytes.",
+      "examples": [
+        "20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+      ]
+    },
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "invalid_input",
+        "invalid_backup",
+        "not_allowed",
+        "not_found",
+        "backup_not_found",
+        "backup_failed",
+        "restore_failed",
+        "restore_timeout",
+        "operation_busy",
+        "database_not_running",
+        "resource_identity_conflict",
+        "unsupported",
+        "failed",
+        "insufficient_storage",
+        "delete_incomplete"
+      ],
+      "description": "Every code the agent puts in db_result.code. The agent also maps any text that is not ^[a-z_]{1,64}$ to failed. The status is 400 for invalid_input and invalid_backup, 403 for not_allowed, 404 for not_found and backup_not_found, 500 for backup_failed and restore_failed, and 409 for all others.",
+      "examples": [
+        "operation_busy"
+      ]
+    },
+    "backup": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/backupKey"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "RFC 3339 with fractional seconds."
+        },
+        "location": {
+          "const": "server"
+        },
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        }
+      },
+      "required": [
+        "key",
+        "size",
+        "createdAt",
+        "location",
+        "sha256"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "size": 1048576,
+          "createdAt": "2026-11-18T02:00:03.123456789Z",
+          "location": "server",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    "capabilities.result": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": 1,
+          "description": "Version of this channel; a second version number next to the session protocol. The engine refuses any other value (agent_upgrade_required)."
+        },
+        "volumeDelete": {
+          "type": "boolean"
+        },
+        "backups": {
+          "type": "boolean"
+        },
+        "query": {
+          "type": "boolean"
+        },
+        "writeQuery": {
+          "type": "boolean"
+        },
+        "restoreUpload": {
+          "type": "boolean"
+        },
+        "offsitePut": {
+          "type": "boolean"
+        },
+        "volumeBackup": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "protocol"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "protocol": 1,
+          "volumeDelete": true,
+          "backups": true,
+          "query": true,
+          "writeQuery": true,
+          "restoreUpload": true,
+          "offsitePut": true,
+          "volumeBackup": true
+        }
+      ]
+    },
+    "capabilities.args": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "examples": [
+        {}
+      ]
+    },
+    "register.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        }
+      ],
+      "description": "The dbSpec identity only. First use pins the identity (container, volume, generation, user, database, type) to the agent; a later request that differs is not_allowed or resource_identity_conflict.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app"
+        }
+      ]
+    },
+    "register.result": {
+      "type": "object",
+      "properties": {
+        "nextBackupAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        }
+      },
+      "required": [
+        "nextBackupAt"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "nextBackupAt": "2026-11-19T02:00:00Z"
+        }
+      ],
+      "description": "The next scheduled dump (02:00 UTC). Redis databases get the same answer but are never dumped."
+    },
+    "backup_list.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        }
+      ],
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app"
+        }
+      ]
+    },
+    "backup_list.result": {
+      "type": "object",
+      "properties": {
+        "backups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/backup"
+          },
+          "description": "Newest first (ties by key, descending)."
+        },
+        "nextBackupAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "lastBackupAt": {
+          "oneOf": [
+            {
+              "$ref": "common.json#/$defs/rfc3339"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastBackupError": {
+          "type": "string",
+          "description": "Empty when the last scheduled dump worked; database_not_running or backup_failed otherwise."
+        }
+      },
+      "required": [
+        "backups",
+        "nextBackupAt",
+        "lastBackupAt",
+        "lastBackupError"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "backups": [
+            {
+              "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+              "size": 1048576,
+              "createdAt": "2026-11-18T02:00:03.123456789Z",
+              "location": "server",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ],
+          "nextBackupAt": "2026-11-19T02:00:00Z",
+          "lastBackupAt": "2026-11-18T02:00:03Z",
+          "lastBackupError": ""
+        }
+      ]
+    },
+    "backup_create.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        }
+      ],
+      "description": "Needs the container running (database_not_running). Takes a pg_dump -Fc; at most 2 GiB (backup_failed beyond that); needs the dump size plus 1 GiB free (insufficient_storage).",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app"
+        }
+      ]
+    },
+    "backup_create.result": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/backupKey"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "location": {
+          "const": "server"
+        },
+        "uploaded": {
+          "const": false
+        },
+        "pruned": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/backupKey"
+          },
+          "description": "Dumps removed to keep the newest 7."
+        }
+      },
+      "required": [
+        "key",
+        "size",
+        "createdAt",
+        "location",
+        "uploaded",
+        "pruned"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "size": 1048576,
+          "createdAt": "2026-11-18T02:00:03.123456789Z",
+          "location": "server",
+          "uploaded": false,
+          "pruned": []
+        }
+      ]
+    },
+    "backup_offsite_put.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/backupKey"
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A presigned PUT URL. It carries a credential; the agent neither logs nor stores it and does not restrict its scheme or host."
+            },
+            "objectKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra request headers, applied as given."
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "key",
+            "url",
+            "objectKey"
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "url": "https://storage.example.com/bucket/db1.dump?X-Amz-Signature=EXAMPLE",
+          "objectKey": "org_EXAMPLE/db1/20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+        }
+      ]
+    },
+    "backup_offsite_put.result": {
+      "type": "object",
+      "properties": {
+        "uploaded": {
+          "const": true
+        },
+        "objectKey": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "uploaded",
+        "objectKey",
+        "size"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "uploaded": true,
+          "objectKey": "org_EXAMPLE/db1/20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "size": 1048576
+        }
+      ]
+    },
+    "backup_offsite_restore.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A presigned GET URL (credential, as above)."
+            },
+            "objectKey": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "url",
+            "objectKey"
+          ]
+        }
+      ],
+      "description": "Downloads the dump (at most 2 GiB) into the server's backups under a new key, then restores it like the restore operation. Needs the container running.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "url": "https://storage.example.com/bucket/db1.dump?X-Amz-Signature=EXAMPLE",
+          "objectKey": "org_EXAMPLE/db1/20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+        }
+      ]
+    },
+    "restore.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/backupKey"
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "key"
+          ]
+        }
+      ],
+      "description": "Needs the container running. Checks the archive (pg_restore --list) and its sha256, takes a safety dump of the live database first (the selected dump is pinned against pruning), then pg_restore --clean --if-exists --single-transaction.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+        }
+      ]
+    },
+    "restore.result": {
+      "type": "object",
+      "properties": {
+        "restored": {
+          "$ref": "#/$defs/backupKey"
+        },
+        "downloaded": {
+          "const": false
+        }
+      },
+      "required": [
+        "restored",
+        "downloaded"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "restored": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "downloaded": false
+        }
+      ],
+      "description": "downloaded is false for backup_offsite_restore too."
+    },
+    "backup_offsite_restore.result": {
+      "type": "object",
+      "properties": {
+        "restored": {
+          "$ref": "#/$defs/backupKey"
+        },
+        "downloaded": {
+          "const": false
+        }
+      },
+      "required": [
+        "restored",
+        "downloaded"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "restored": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "downloaded": false
+        }
+      ],
+      "description": "downloaded is false for backup_offsite_restore too."
+    },
+    "backup_close.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "downloadId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$"
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "downloadId"
+          ]
+        }
+      ],
+      "description": "Ends a download early; closing an unknown id is not an error.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "downloadId": "dl-1"
+        }
+      ]
+    },
+    "backup_close.result": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "const": true
+        }
+      },
+      "required": [
+        "closed"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "closed": true
+        }
+      ]
+    },
+    "backup_read.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/backupKey"
+            },
+            "downloadId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "key",
+            "downloadId",
+            "offset"
+          ]
+        }
+      ],
+      "description": "Reads one 128 KiB chunk. The first call of a downloadId must have offset 0; every later call must use the offset the previous answer ended at (invalid_input otherwise).",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "downloadId": "dl-1",
+          "offset": 0
+        }
+      ]
+    },
+    "backup_read.result": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "$ref": "common.json#/$defs/base64",
+          "description": "At most 128 KiB of the dump, base64."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total size of the dump."
+        },
+        "eof": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "data",
+        "offset",
+        "size",
+        "eof"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "data": "AAAA",
+          "offset": 0,
+          "size": 3,
+          "eof": true
+        }
+      ]
+    },
+    "upload_start.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        }
+      ],
+      "description": "Needs 1 GiB free (insufficient_storage). Only one upload may exist per database (operation_busy).",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app"
+        }
+      ]
+    },
+    "upload_start.result": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/backupKey"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+        }
+      ]
+    },
+    "upload_chunk.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/backupKey"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "data": {
+              "$ref": "common.json#/$defs/base64",
+              "maxLength": 180000,
+              "description": "At most 180000 base64 characters.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "key",
+            "offset",
+            "data"
+          ]
+        }
+      ],
+      "description": "offset must equal the bytes stored so far (invalid_input otherwise, which makes a repeated chunk harmless). The upload may not exceed 2 GiB.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "offset": 0,
+          "data": "AAAA"
+        }
+      ]
+    },
+    "upload_chunk.result": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The new total size."
+        }
+      },
+      "required": [
+        "offset"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "offset": 3
+        }
+      ]
+    },
+    "upload_finish.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/backupKey"
+            },
+            "sha256": {
+              "$ref": "common.json#/$defs/sha256"
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "key",
+            "sha256"
+          ]
+        }
+      ],
+      "description": "Needs the container running. Checks the archive (pg_restore --list) and that the sha256 matches (invalid_backup). It does not restore.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    "upload_finish.result": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/backupKey"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "RFC 3339 with fractional seconds."
+        },
+        "location": {
+          "const": "server"
+        },
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        }
+      },
+      "required": [
+        "key",
+        "size",
+        "createdAt",
+        "location",
+        "sha256"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump",
+          "size": 1048576,
+          "createdAt": "2026-11-18T02:00:03.123456789Z",
+          "location": "server",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    "upload_abort.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/backupKey"
+            }
+          },
+          "additionalProperties": true,
+          "required": [
+            "key"
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app",
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+        }
+      ]
+    },
+    "upload_abort.result": {
+      "type": "object",
+      "properties": {
+        "aborted": {
+          "const": true
+        },
+        "key": {
+          "$ref": "#/$defs/backupKey"
+        }
+      },
+      "required": [
+        "aborted",
+        "key"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "aborted": true,
+          "key": "20261118T020000Z-aaaaaaaaaaaaaaaa.dump"
+        }
+      ]
+    },
+    "delete.args": {
+      "allOf": [
+        {
+          "$ref": "frames.json#/$defs/dbSpec"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        }
+      ],
+      "description": "Removes the container and its volume. Retained dumps are not erased.",
+      "examples": [
+        {
+          "generation": "g1",
+          "type": "postgres",
+          "orgId": "org_EXAMPLE",
+          "databaseName": "db1",
+          "container": "f2c-db-db1",
+          "volume": "f2c-db-db1-data",
+          "user": "app",
+          "database": "app"
+        }
+      ]
+    },
+    "delete.result": {
+      "type": "object",
+      "properties": {
+        "deleted": {
+          "const": true
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "deleted": true
+        }
+      ]
+    },
+    "volume_backup_create.args": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string",
+          "pattern": "^f2c-[^/\\\\:]*$",
+          "description": "A Docker volume whose name starts with f2c- and has no /, \\ or :."
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "volume"
+      ],
+      "description": "Not scoped to a database: no dbSpec, no lock, no pinning. Tars the volume read-only through a short-lived alpine container (30 min limit).",
+      "examples": [
+        {
+          "volume": "f2c-db-db1-data"
+        }
+      ]
+    },
+    "volume_backup_create.result": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "location": {
+          "const": "server"
+        },
+        "uploaded": {
+          "const": false
+        }
+      },
+      "required": [
+        "volume",
+        "size",
+        "location",
+        "uploaded"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "volume": "f2c-db-db1-data",
+          "size": 2048,
+          "location": "server",
+          "uploaded": false
+        }
+      ],
+      "description": "The archive is deleted when the operation ends; this call only measures it."
+    },
+    "volume_backup_offsite.args": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string",
+          "pattern": "^f2c-[^/\\\\:]*$",
+          "description": "A Docker volume whose name starts with f2c- and has no /, \\ or :."
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A presigned PUT URL (credential)."
+        },
+        "objectKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "volume",
+        "url",
+        "objectKey"
+      ],
+      "examples": [
+        {
+          "volume": "f2c-db-db1-data",
+          "url": "https://storage.example.com/bucket/vol.tar.gz?X-Amz-Signature=EXAMPLE",
+          "objectKey": "org_EXAMPLE/volumes/f2c-db-db1-data.tar.gz"
+        }
+      ]
+    },
+    "volume_backup_offsite.result": {
+      "type": "object",
+      "properties": {
+        "volume": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uploaded": {
+          "const": true
+        },
+        "objectKey": {
+          "type": "string"
+        },
+        "location": {
+          "const": "both"
+        }
+      },
+      "required": [
+        "volume",
+        "size",
+        "uploaded",
+        "objectKey",
+        "location"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "volume": "f2c-db-db1-data",
+          "size": 2048,
+          "uploaded": true,
+          "objectKey": "org_EXAMPLE/volumes/f2c-db-db1-data.tar.gz",
+          "location": "both"
+        }
+      ]
+    }
+  }
+}

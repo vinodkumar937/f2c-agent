@@ -1,0 +1,58 @@
+# f2c Caddy binaries per arch (stock Caddy + caddy-dns/digitalocean + caddy-dns/cloudflare + caddy-dns/acmedns), same pins as
+# deploy/caddy/Dockerfile. Published as release assets with a SHA256SUMS file; deploy/install.sh
+# (--dns-provider) downloads caddy-linux-<arch> from the release tag caddy-v<ver>-do<n>-cf<n>-ad<n> of this repository (the tag install.sh names in
+# F2C_CADDY_TAG) and verifies it against that SHA256SUMS and the signed agent-release SHA256SUMS before installing.
+name: caddy-binaries
+on:
+  workflow_dispatch:
+  push:
+    tags: ["caddy-v*"]
+permissions:
+  contents: read
+env:
+  CADDY_VERSION: v2.11.7
+  DO_MODULE: github.com/caddy-dns/digitalocean@04bde2867106aa1b44c2f9da41a285fa02e629c5
+  CF_MODULE: github.com/caddy-dns/cloudflare@v0.2.4
+  AD_MODULE: github.com/caddy-dns/acmedns@v0.7.0
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.25"
+      - name: xcaddy build
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          GOOS='' GOARCH='' go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.5
+          xcaddy build "$CADDY_VERSION" --with "$DO_MODULE" --with "$CF_MODULE" --with "$AD_MODULE" --output "caddy-linux-${{ matrix.arch }}"
+          sha256sum "caddy-linux-${{ matrix.arch }}" > "caddy-linux-${{ matrix.arch }}.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: caddy-linux-${{ matrix.arch }}
+          path: caddy-linux-${{ matrix.arch }}*
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/caddy-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # only this job publishes the release
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          merge-multiple: true
+      - run: cat caddy-linux-*.sha256 > SHA256SUMS && cat SHA256SUMS
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          # a pre-release, so that GitHub's "latest release" (what install.sh downloads the agent from) stays the agent release
+          prerelease: true
+          files: |
+            caddy-linux-amd64
+            caddy-linux-arm64
+            SHA256SUMS

@@ -1,0 +1,32 @@
+# f2c-agent. Installed by install.sh; joined with `f2c-agent join` first (install.sh leaves the unit disabled until then).
+[Unit]
+Description=F2C agent (connects out to the control plane over wss)
+Wants=network-online.target docker.service caddy.service
+After=network-online.target docker.service caddy.service
+# agent.json is written by `f2c-agent join` (config.go): until then the unit is skipped instead of failing and restarting every 5 s.
+ConditionPathExists=/var/lib/f2c-agent/agent.json
+
+[Service]
+Type=simple
+User=f2c-agent
+Group=f2c-agent
+# docker: allowlisted container ops. caddy: read ACME cert storage for certwatch (filesystem supplement).
+SupplementaryGroups=docker caddy
+Environment=F2C_AGENT_STATE_DIR=/var/lib/f2c-agent
+ExecStart=/var/lib/f2c-agent/bin/f2c-agent run --state-dir /var/lib/f2c-agent
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/f2c-agent
+# '-' : ignore if missing (BYO install does not create this dir unless --dns-provider).
+ReadWritePaths=-/etc/f2c-agent
+# Certwatch primarily uses TLS SNI; RO path keeps the filesystem supplement working under ProtectSystem=strict.
+ReadOnlyPaths=-/var/lib/caddy/.local/share/caddy/certificates
+StateDirectory=f2c-agent
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

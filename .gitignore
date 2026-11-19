@@ -1,0 +1,23 @@
+# build output
+/f2c-agent
+/f2c-agent-*
+/agent
+/bin/
+/dist/
+*.exe
+# agent state (token file) if a state dir is ever pointed inside the repo
+agent.json
+done.json
+# secrets: never commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+id_rsa*
+id_ed25519*
+id_ecdsa*
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

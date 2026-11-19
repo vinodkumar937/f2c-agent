@@ -1,0 +1,404 @@
+{
+ "v": 1,
+ "about": "Shared test vectors for the #19 update guard: used by the Go agent (internal/version CompareBuild and the self_update decision) and by the engine's TypeScript port. Lives at docs/protocol/testdata/version-compare.json; the engine copy must stay identical.",
+ "rules": {
+  "cmp": "sign of the semver precedence of target versus cur (build metadata ignored, a leading v is allowed); null when either side is not a valid semver or the target has no signed version",
+  "build": "only when cmp == 0: 'newer' | 'older' | 'same' | 'unordered', the target's +build versus the current one. Both 12-digit UTC stamps (YYYYMMDDHHMM): numeric order. Both absent: 'same'. Anything else: 'unordered'.",
+  "decision": "allow | up_to_date (same sha256 as the running binary; checked first) | refuse_no_rollback (needs rollback:true with a reason; this is also the fail-closed answer) | refuse_integrity (same version and build, different bytes) | refuse_floor (below the persisted signed floor; rollback never overrides it)",
+  "order": "1 same sha256 -> up_to_date. 2 floor set and target below it (or unsigned) -> refuse_floor. 3 cmp > 0 -> allow. 4 build newer -> allow. 5 build same -> refuse_integrity. 6 everything else (cmp < 0, cmp null, build older or unordered) -> allow with rollback:true, else refuse_no_rollback."
+ },
+ "cases": [
+  {
+   "name": "newer release",
+   "cur": "0.3.1+202611190800",
+   "target": "0.4.0+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "older release, no flag",
+   "cur": "0.4.0+202611201015",
+   "target": "0.3.1+202611190800",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": -1,
+    "build": null,
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "older release, rollback",
+   "cur": "0.4.0+202611201015",
+   "target": "0.3.1+202611190800",
+   "rollback": true,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": -1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "rollback flag on an upgrade is just an upgrade",
+   "cur": "0.3.1+202611190800",
+   "target": "0.4.0+202611201015",
+   "rollback": true,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "same hash is up to date, whatever the versions say",
+   "cur": "0.4.0+202611201015",
+   "target": "0.4.0+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": true,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "same",
+    "decision": "up_to_date"
+   }
+  },
+  {
+   "name": "equal precedence, newer stamp (a rebuild)",
+   "cur": "0.4.0+202611201015",
+   "target": "0.4.0+202611210900",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "newer",
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "equal precedence, older stamp, no flag",
+   "cur": "0.4.0+202611201015",
+   "target": "0.4.0+202611190800",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "older",
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "equal precedence, older stamp, rollback",
+   "cur": "0.4.0+202611201015",
+   "target": "0.4.0+202611190800",
+   "rollback": true,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "older",
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "same stamp, different bytes",
+   "cur": "0.4.0+202611201015",
+   "target": "0.4.0+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "same",
+    "decision": "refuse_integrity"
+   }
+  },
+  {
+   "name": "prerelease to release",
+   "cur": "0.4.0-rc.1+202611190800",
+   "target": "0.4.0+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "release to prerelease",
+   "cur": "0.4.0+202611201015",
+   "target": "0.4.0-rc.1+202611190800",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": -1,
+    "build": null,
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "prerelease numeric identifiers",
+   "cur": "0.4.0-rc.2+202611190800",
+   "target": "0.4.0-rc.10+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "leading v is ignored",
+   "cur": "v0.4.0+202611201015",
+   "target": "0.4.0+202611210900",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "newer",
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "build metadata does not decide precedence",
+   "cur": "0.4.0+202611210900",
+   "target": "0.4.1+202611190800",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "unordered builds (not 12-digit stamps)",
+   "cur": "0.4.0+abc",
+   "target": "0.4.0+def",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "unordered",
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "unordered builds, rollback",
+   "cur": "0.4.0+abc",
+   "target": "0.4.0+def",
+   "rollback": true,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "unordered",
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "no build on either side is the same build",
+   "cur": "0.4.0",
+   "target": "0.4.0",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "same",
+    "decision": "refuse_integrity"
+   }
+  },
+  {
+   "name": "no build on one side is unordered",
+   "cur": "0.4.0",
+   "target": "0.4.0+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 0,
+    "build": "unordered",
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "dev build to a release",
+   "cur": "0.1.0-dev",
+   "target": "0.3.1+202611190800",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": 1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "unparseable current version fails closed",
+   "cur": "dev",
+   "target": "0.4.0+202611201015",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": null,
+    "build": null,
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "unparseable current version, rollback",
+   "cur": "dev",
+   "target": "0.4.0+202611201015",
+   "rollback": true,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": null,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "unparseable target version fails closed",
+   "cur": "0.4.0+202611201015",
+   "target": "latest",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": null,
+    "build": null,
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "a release with no signed version header fails closed",
+   "cur": "0.4.0+202611201015",
+   "target": "",
+   "rollback": false,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": false,
+   "expect": {
+    "cmp": null,
+    "build": null,
+    "decision": "refuse_no_rollback"
+   }
+  },
+  {
+   "name": "no signed version header, rollback",
+   "cur": "0.4.0+202611201015",
+   "target": "",
+   "rollback": true,
+   "floor": null,
+   "sameSha": false,
+   "targetSigned": false,
+   "expect": {
+    "cmp": null,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "below the signed floor",
+   "cur": "0.4.2+202611201015",
+   "target": "0.4.0+202611190800",
+   "rollback": false,
+   "floor": "0.4.1",
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": -1,
+    "build": null,
+    "decision": "refuse_floor"
+   }
+  },
+  {
+   "name": "below the floor, rollback does not help",
+   "cur": "0.4.2+202611201015",
+   "target": "0.4.0+202611190800",
+   "rollback": true,
+   "floor": "0.4.1",
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": -1,
+    "build": null,
+    "decision": "refuse_floor"
+   }
+  },
+  {
+   "name": "at the floor, rollback",
+   "cur": "0.4.2+202611201015",
+   "target": "0.4.1+202611190800",
+   "rollback": true,
+   "floor": "0.4.1",
+   "sameSha": false,
+   "targetSigned": true,
+   "expect": {
+    "cmp": -1,
+    "build": null,
+    "decision": "allow"
+   }
+  },
+  {
+   "name": "floor with a headerless target",
+   "cur": "0.4.2+202611201015",
+   "target": "",
+   "rollback": true,
+   "floor": "0.4.1",
+   "sameSha": false,
+   "targetSigned": false,
+   "expect": {
+    "cmp": null,
+    "build": null,
+    "decision": "refuse_floor"
+   }
+  }
+ ]
+}

@@ -1,0 +1,938 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/f2c-agent/protocol/v1/release.json",
+  "title": "F2C agent protocol: release artifacts",
+  "description": "version.json, an engine's pin of a release (agent-release.json), release-keys.json (the trusted key list) and SHA256SUMS.sigs (spec 1.0-draft, protocol v1). SHA256SUMS is coreutils text with a '# ' header (docs/protocol.md section 8.1) and SHA256SUMS.sig is 64 raw bytes; neither has a JSON form.",
+  "$defs": {
+    "versionJson": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "const": "f2c-agent"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\+[0-9]{12}$"
+        },
+        "builtAt": {
+          "$ref": "common.json#/$defs/rfc3339"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^f2c-agent-linux-(amd64|arm64)$"
+              },
+              "goos": {
+                "const": "linux"
+              },
+              "goarch": {
+                "$ref": "common.json#/$defs/arch"
+              },
+              "sha256": {
+                "$ref": "common.json#/$defs/sha256"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "name",
+              "goos",
+              "goarch",
+              "sha256",
+              "size"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "sha256": {
+                "$ref": "common.json#/$defs/sha256"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "name",
+              "sha256",
+              "size"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 8,
+          "maxItems": 9
+        },
+        "sumsFile": {
+          "const": "SHA256SUMS"
+        },
+        "signatureFile": {
+          "oneOf": [
+            {
+              "const": "SHA256SUMS.sig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signaturesFile": {
+          "oneOf": [
+            {
+              "const": "SHA256SUMS.sigs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The key-id signature list; null for an unsigned build. version.json is written before SHA256SUMS, so it names the signature files but cannot carry their hashes."
+        },
+        "keysSerial": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Serial of keys/release-keys.json at build time; also the '# keys-serial' header of SHA256SUMS."
+        },
+        "floor": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "The signed '# floor' of the release, when it has one."
+        },
+        "caddy": {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]+$"
+            },
+            "sha256": {
+              "type": "object",
+              "properties": {
+                "amd64": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "arm64": {
+                  "$ref": "common.json#/$defs/sha256"
+                }
+              },
+              "required": [
+                "amd64",
+                "arm64"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "tag",
+            "sha256"
+          ],
+          "additionalProperties": true,
+          "description": "Hash-only Caddy entry (the binaries are not release assets); the same hashes are the caddy-linux-<arch> lines of SHA256SUMS."
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "builtAt",
+        "artifacts",
+        "files",
+        "sumsFile",
+        "signatureFile"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "name": "f2c-agent",
+          "version": "0.3.1+202611181227",
+          "builtAt": "2026-11-18T12:27:43Z",
+          "artifacts": [
+            {
+              "name": "f2c-agent-linux-amd64",
+              "goos": "linux",
+              "goarch": "amd64",
+              "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "size": 8868000
+            },
+            {
+              "name": "f2c-agent-linux-arm64",
+              "goos": "linux",
+              "goarch": "arm64",
+              "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "size": 8192160
+            }
+          ],
+          "files": [
+            {
+              "name": "install.sh",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "harden.sh",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "f2c-agent.service",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "f2c-harden.path",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "f2c-harden.service",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "f2c-caddy-dns-env.path",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "f2c-caddy-dns-env.service",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "caddy-resume.conf",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            },
+            {
+              "name": "release-keys.json",
+              "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "size": 100
+            }
+          ],
+          "sumsFile": "SHA256SUMS",
+          "signatureFile": "SHA256SUMS.sig",
+          "signaturesFile": "SHA256SUMS.sigs",
+          "keysSerial": 1,
+          "caddy": {
+            "tag": "caddy-v2.11.7-do1-cf1-ad1",
+            "sha256": {
+              "amd64": "4444444444444444444444444444444444444444444444444444444444444444",
+              "arm64": "5555555555555555555555555555555555555555555555555555555555555555"
+            }
+          }
+        }
+      ],
+      "description": "version.json: the release manifest. It is not itself signed (see open questions)."
+    },
+    "agentReleasePin": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._+-]+$"
+        },
+        "files": {
+          "type": "object",
+          "properties": {
+            "SHA256SUMS": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "SHA256SUMS.sig": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "version.json": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-agent-linux-amd64": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-agent-linux-arm64": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "install.sh": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "harden.sh": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-agent.service": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-harden.path": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-harden.service": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-caddy-dns-env.path": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "f2c-caddy-dns-env.service": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "caddy-resume.conf": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "SHA256SUMS.sigs": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "release-keys.json": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "SHA256SUMS",
+            "SHA256SUMS.sig",
+            "version.json",
+            "f2c-agent-linux-amd64",
+            "f2c-agent-linux-arm64",
+            "install.sh",
+            "harden.sh",
+            "f2c-agent.service",
+            "f2c-harden.path",
+            "f2c-harden.service",
+            "f2c-caddy-dns-env.path",
+            "f2c-caddy-dns-env.service",
+            "caddy-resume.conf"
+          ],
+          "additionalProperties": false
+        },
+        "format": {
+          "const": 2,
+          "description": "Absent means format 1 (the 13-file pin). Format 2 adds the two files above, caddy, keys, and optionally supersedes and rollback. The engine and a format 2 pin are released and rolled back together."
+        },
+        "caddy": {
+          "type": "object",
+          "properties": {
+            "amd64": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            },
+            "arm64": {
+              "type": "object",
+              "properties": {
+                "sha256": {
+                  "$ref": "common.json#/$defs/sha256"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "sha256",
+                "size"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "amd64",
+            "arm64"
+          ],
+          "additionalProperties": false,
+          "description": "Hash-only Caddy pin per architecture; must equal the signed caddy-linux-<arch> lines."
+        },
+        "keys": {
+          "type": "object",
+          "properties": {
+            "serial": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sha256": {
+              "$ref": "common.json#/$defs/sha256"
+            }
+          },
+          "required": [
+            "serial",
+            "sha256"
+          ],
+          "additionalProperties": true,
+          "description": "Serial and sha256 of the release's release-keys.json."
+        },
+        "supersedes": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._+-]+$",
+          "description": "The pin version this pin replaces: the authoritative chain for the engine's high-water check."
+        },
+        "rollback": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "at": {
+              "$ref": "common.json#/$defs/rfc3339"
+            }
+          },
+          "required": [
+            "reason",
+            "at"
+          ],
+          "additionalProperties": true,
+          "description": "Present only on a deliberate pin to an older version; needs supersedes equal to the high-water mark. Never allowed below a signed floor."
+        }
+      },
+      "required": [
+        "repo",
+        "tag",
+        "version",
+        "files"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "repo": "example-org/f2c-agent",
+          "tag": "v0.3.1",
+          "version": "0.3.1+202611181227",
+          "files": {
+            "SHA256SUMS": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "SHA256SUMS.sig": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "version.json": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-agent-linux-amd64": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-agent-linux-arm64": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "install.sh": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "harden.sh": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-agent.service": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-harden.path": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-harden.service": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-caddy-dns-env.path": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-caddy-dns-env.service": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "caddy-resume.conf": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            }
+          }
+        },
+        {
+          "repo": "example-org/f2c-agent",
+          "tag": "v0.4.0",
+          "version": "0.4.0+202611201015",
+          "format": 2,
+          "files": {
+            "SHA256SUMS": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "SHA256SUMS.sig": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "SHA256SUMS.sigs": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "version.json": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "release-keys.json": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-agent-linux-amd64": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-agent-linux-arm64": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "install.sh": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "harden.sh": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-agent.service": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-harden.path": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-harden.service": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-caddy-dns-env.path": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "f2c-caddy-dns-env.service": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            },
+            "caddy-resume.conf": {
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+              "size": 100
+            }
+          },
+          "caddy": {
+            "amd64": {
+              "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+              "size": 100
+            },
+            "arm64": {
+              "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+              "size": 100
+            }
+          },
+          "keys": {
+            "serial": 1,
+            "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+          },
+          "supersedes": "0.3.1+202611181227"
+        }
+      ],
+      "description": "agent-release.json: an engine's pin of a release. Format 1: exactly 13 files. Format 2: 15 files plus caddy, keys, supersedes and rollback.",
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "format"
+            ]
+          },
+          "then": {
+            "required": [
+              "caddy",
+              "keys"
+            ],
+            "properties": {
+              "files": {
+                "type": "object",
+                "required": [
+                  "SHA256SUMS.sigs",
+                  "release-keys.json"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "keyId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "The first 8 bytes of sha256 of the raw 32-byte public key, as 16 lowercase hex characters. Only a selector: the signature is always verified against the key the id names.",
+      "examples": [
+        "0123456789abcdef"
+      ]
+    },
+    "releaseKeys": {
+      "type": "object",
+      "description": "keys/release-keys.json, the single source of the trusted release public keys (agent: embedded; install.sh: generated block; engine: trust file changed only through a signed release). active keys verify and may sign, retired keys verify only, revoked keys never verify and stay listed.",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "serial": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Raised on every change of the list."
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/keyId"
+              },
+              "alg": {
+                "const": "ed25519"
+              },
+              "pub": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9+/]{43}=$",
+                "description": "Raw 32-byte Ed25519 public key, standard base64."
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "retired",
+                  "revoked"
+                ]
+              },
+              "added": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "alg",
+              "pub",
+              "status"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "v",
+        "serial",
+        "keys"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "v": 1,
+          "serial": 1,
+          "keys": [
+            {
+              "id": "0123456789abcdef",
+              "alg": "ed25519",
+              "pub": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+              "status": "active",
+              "added": "2026-11-18",
+              "note": "example key"
+            }
+          ]
+        }
+      ]
+    },
+    "sumsSigs": {
+      "type": "object",
+      "description": "SHA256SUMS.sigs: signatures over the exact bytes of SHA256SUMS, each naming its key by id. One valid signature by a trusted (active or retired) key is enough; unknown and revoked ids are skipped. The raw 64-byte SHA256SUMS.sig stays beside it for verifiers older than key ids.",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "keyId": {
+                "$ref": "#/$defs/keyId"
+              },
+              "alg": {
+                "const": "ed25519"
+              },
+              "sig": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9+/]{86}==$",
+                "description": "64-byte signature, standard base64."
+              }
+            },
+            "required": [
+              "keyId",
+              "alg",
+              "sig"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "v",
+        "signatures"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "v": 1,
+          "signatures": [
+            {
+              "keyId": "0123456789abcdef",
+              "alg": "ed25519",
+              "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

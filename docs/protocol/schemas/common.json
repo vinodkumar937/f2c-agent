@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/f2c-agent/protocol/v1/common.json",
+  "title": "F2C agent protocol: common types",
+  "description": "Shared string patterns and enums used by the other schema files (spec 1.0-draft, protocol v1).",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Command / request id chosen by the engine. The agent accepts any non-empty string; the engine only issues ids matching ^[A-Za-z0-9_.:-]{1,80}$.",
+      "examples": [
+        "agentupd-lz3k9"
+      ]
+    },
+    "engineCommandId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,80}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "format": "date-time",
+      "examples": [
+        "2026-11-18T10:00:00Z"
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "examples": [
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    "hostname": {
+      "type": "string",
+      "pattern": "^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "maxLength": 253,
+      "examples": [
+        "app.example.com"
+      ]
+    },
+    "containerName": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,62}$",
+      "examples": [
+        "myapp"
+      ]
+    },
+    "f2cName": {
+      "type": "string",
+      "pattern": "^f2c-[a-z0-9][a-z0-9_.-]{0,58}$",
+      "examples": [
+        "f2c-net"
+      ]
+    },
+    "imageRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}$",
+      "examples": [
+        "registry.example.com/team/app:1.2.3"
+      ]
+    },
+    "f2cImage": {
+      "type": "string",
+      "description": "Locally built image name f2c/<app>:<tag> (exact pattern: see internal/build/load.go validF2cImage).",
+      "pattern": "^f2c/[a-z0-9][a-z0-9_.-]{0,62}:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$",
+      "examples": [
+        "f2c/myapp:abc123"
+      ]
+    },
+    "imageId": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "examples": [
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    "serverToken": {
+      "type": "string",
+      "pattern": "^f2cs_",
+      "maxLength": 256,
+      "description": "Server token. Placeholder form only in examples.",
+      "examples": [
+        "f2cs_EXAMPLE_NOT_A_REAL_TOKEN"
+      ]
+    },
+    "joinToken": {
+      "type": "string",
+      "pattern": "^f2cj_",
+      "description": "One-time join token.",
+      "examples": [
+        "f2cj_EXAMPLE_NOT_A_REAL_TOKEN"
+      ]
+    },
+    "resultCodeLegacy": {
+      "type": "string",
+      "enum": [
+        "unknown_command",
+        "expired",
+        "harden_not_installed",
+        "harden_bad_request",
+        "harden_state_unreadable",
+        "harden_script_failed",
+        "harden_interrupted",
+        "harden_timeout"
+      ],
+      "description": "The eight codes an agent sends at every protocol, and the only codes at protocol 0. Everything else at protocol 0 is free text with no code."
+    },
+    "resultCodeV1": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "enum": [
+        "bad_request",
+        "unknown_cmd",
+        "expired",
+        "not_found",
+        "not_allowed",
+        "conflict",
+        "port_in_use",
+        "image_not_found",
+        "image_pull_failed",
+        "timeout",
+        "cancelled",
+        "interrupted",
+        "docker_unavailable",
+        "no_space",
+        "build_failed",
+        "transfer_failed",
+        "integrity_failed",
+        "caddy_unavailable",
+        "caddy_rejected",
+        "harden_not_installed",
+        "harden_failed",
+        "harden_bad_request",
+        "harden_state_unreadable",
+        "harden_script_failed",
+        "harden_interrupted",
+        "harden_timeout",
+        "internal",
+        "dockerfile_not_found",
+        "dockerfile_invalid_path",
+        "dockerfile_invalid_target",
+        "dockerfile_target_not_found",
+        "build_arch_mismatch"
+      ],
+      "description": "Protocol >= 1: the 27 core codes plus the five kept prefix codes. Every ok:false result carries one. Retry guidance is in docs/protocol.md 5.1 (no retryable field on the wire). unknown_cmd replaces unknown_command at protocol >= 1."
+    },
+    "resultCode": {
+      "type": "string",
+      "enum": [
+        "bad_request",
+        "unknown_cmd",
+        "expired",
+        "not_found",
+        "not_allowed",
+        "conflict",
+        "port_in_use",
+        "image_not_found",
+        "image_pull_failed",
+        "timeout",
+        "cancelled",
+        "interrupted",
+        "docker_unavailable",
+        "no_space",
+        "build_failed",
+        "transfer_failed",
+        "integrity_failed",
+        "caddy_unavailable",
+        "caddy_rejected",
+        "harden_not_installed",
+        "harden_failed",
+        "harden_bad_request",
+        "harden_state_unreadable",
+        "harden_script_failed",
+        "harden_interrupted",
+        "harden_timeout",
+        "internal",
+        "unknown_command",
+        "dockerfile_not_found",
+        "dockerfile_invalid_path",
+        "dockerfile_invalid_target",
+        "dockerfile_target_not_found",
+        "build_arch_mismatch"
+      ],
+      "description": "Machine-readable failure code in a result frame. Protocol 0 sessions only ever see resultCodeLegacy; protocol >= 1 sessions see resultCodeV1 on every ok:false (the error text is unchanged).",
+      "examples": [
+        "image_not_found",
+        "unknown_cmd",
+        "harden_timeout"
+      ]
+    },
+    "base64": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]*={0,2}$",
+      "examples": [
+        "aGVsbG8="
+      ]
+    },
+    "arch": {
+      "type": "string",
+      "enum": [
+        "amd64",
+        "arm64"
+      ]
+    },
+    "httpsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "description": "http(s) URL without credentials or query (token goes in the Authorization header).",
+      "examples": [
+        "https://engine.example.com/agent/context/srv_EXAMPLE/job1"
+      ]
+    }
+  }
+}

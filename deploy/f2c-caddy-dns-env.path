@@ -1,0 +1,11 @@
+# Restarts Caddy when the agent updates caddy-dns.env (DO_AUTH_TOKEN / CF_API_TOKEN) so
+# EnvironmentFile is re-read for {env.*} placeholders. Keeps f2c-agent NoNewPrivileges=yes.
+[Unit]
+Description=Watch F2C Caddy DNS env for token updates
+
+[Path]
+PathChanged=/etc/f2c-agent/caddy-dns.env
+Unit=f2c-caddy-dns-env.service
+
+[Install]
+WantedBy=multi-user.target

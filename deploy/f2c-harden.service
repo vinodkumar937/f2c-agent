@@ -1,0 +1,25 @@
+# Root oneshot for the optional "Harden server" step (deploy/harden.sh, installed root-owned 0755 at
+# /usr/local/lib/f2c/harden.sh, outside anything f2c-agent can write). Started only by f2c-harden.path or by hand;
+# no [Install] section, so it can never be enabled at boot. Results: /var/lib/f2c-harden/results (0750 root:f2c-agent).
+[Unit]
+Description=F2C optional server hardening (dry run / apply / rollback)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/f2c/harden.sh --request /var/lib/f2c-agent/harden/request --result-dir /var/lib/f2c-harden/results
+# Safety net, runs after EVERY stop (success, failure, timeout, kill): if an apply died before finishing (its
+# in-flight marker is still there), roll that backup back, verify it and write the run's result. A no-op otherwise.
+ExecStopPost=-/usr/local/lib/f2c/harden.sh --stop-post
+# Timeline: harden.sh stops starting new steps after its own 15 min budget; at 20 min systemd sends SIGTERM and
+# harden.sh (children run in the background, so the trap fires at once) stops the child, rolls back and reports.
+# If it has not exited 5 min later (TimeoutStopSec) everything left is SIGKILLed and ExecStopPost rolls back.
+# Agent: replies by 21 min (engine waits 22 min) and keeps following the unit afterwards to record the outcome.
+TimeoutStartSec=20min
+TimeoutStopSec=5min
+# mixed: SIGTERM to harden.sh only (it stops its own child), SIGKILL to leftovers (a hung apt-get/dpkg) only after
+# TimeoutStopSec. Services started by apt/systemctl (fail2ban, Docker, Caddy, f2c-agent) live in their own units and
+# are never touched by this.
+KillMode=mixed
+UMask=0022

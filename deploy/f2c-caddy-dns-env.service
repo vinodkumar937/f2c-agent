@@ -1,0 +1,8 @@
+[Unit]
+Description=Reload Caddy after F2C DNS env change
+After=caddy.service
+Requires=caddy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart caddy.service

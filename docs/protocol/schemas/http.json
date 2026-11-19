@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/f2c-agent/protocol/v1/http.json",
+  "title": "F2C agent protocol: enrolment HTTP bodies",
+  "description": "Request and response bodies of POST /agent/join and POST /agent/reattach (spec 1.0-draft, protocol v1).",
+  "$defs": {
+    "joinRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "$ref": "common.json#/$defs/joinToken"
+        },
+        "info": {
+          "type": "object",
+          "properties": {
+            "cpuCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "memoryMb": {
+              "type": "number"
+            },
+            "diskGb": {
+              "type": "number"
+            },
+            "agentVersion": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "publicIp": {
+              "type": "string",
+              "description": "Empty when not detected or not public; the engine then uses the address it sees."
+            },
+            "arch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "cpuCount",
+            "agentVersion",
+            "arch"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "token",
+        "info"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "token": "f2cj_EXAMPLE_NOT_A_REAL_TOKEN",
+          "info": {
+            "cpuCount": 2,
+            "memoryMb": 3900,
+            "diskGb": 80,
+            "agentVersion": "0.3.1+202611181227",
+            "provider": "example",
+            "publicIp": "192.0.2.20",
+            "arch": "amd64"
+          }
+        }
+      ],
+      "description": "POST <engine>/agent/join"
+    },
+    "joinResponse": {
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string"
+        },
+        "serverToken": {
+          "$ref": "common.json#/$defs/serverToken"
+        }
+      },
+      "required": [
+        "serverId",
+        "serverToken"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "serverId": "srv_EXAMPLE0000001",
+          "serverToken": "f2cs_EXAMPLE_NOT_A_REAL_TOKEN"
+        }
+      ],
+      "description": "201 Created."
+    },
+    "errorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "error": "join token is invalid, used or expired"
+        },
+        {
+          "error": "example.com overlaps the wildcard of another server",
+          "code": "wildcard_taken"
+        }
+      ],
+      "description": "Non-2xx answer from join (and reattach)."
+    },
+    "reattachRequest": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "$ref": "common.json#/$defs/serverToken"
+        },
+        "identity": {
+          "type": "object",
+          "properties": {
+            "claimedServerId": {
+              "type": "string"
+            },
+            "tokenFingerprint": {
+              "$ref": "common.json#/$defs/sha256"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "ips": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "publicIp": {
+              "type": "string"
+            },
+            "arch": {
+              "type": "string"
+            },
+            "agentVersion": {
+              "type": "string"
+            },
+            "agentHash": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "claimedServerId",
+            "tokenFingerprint",
+            "hostname",
+            "ips",
+            "arch",
+            "agentVersion"
+          ],
+          "additionalProperties": true
+        },
+        "inventory": {
+          "type": "object",
+          "properties": {
+            "containers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+              }
+            },
+            "databases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "orgId": {
+                    "type": "string"
+                  },
+                  "databaseName": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "container": {
+                    "type": "string"
+                  },
+                  "volume": {
+                    "type": "string"
+                  },
+                  "generation": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "type": "string"
+                  },
+                  "database": {
+                    "type": "string"
+                  },
+                  "deleted": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "volumes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "caddyHosts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "containers",
+            "databases",
+            "volumes",
+            "caddyHosts"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "token",
+        "identity",
+        "inventory"
+      ],
+      "additionalProperties": true,
+      "examples": [
+        {
+          "token": "f2cs_EXAMPLE_NOT_A_REAL_TOKEN",
+          "identity": {
+            "claimedServerId": "srv_EXAMPLE0000001",
+            "tokenFingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+            "hostname": "host1",
+            "ips": [
+              "192.0.2.10"
+            ],
+            "publicIp": "192.0.2.20",
+            "arch": "amd64",
+            "agentVersion": "0.3.1+202611181227",
+            "agentHash": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "inventory": {
+            "containers": [
+              {
+                "name": "myapp",
+                "state": "running",
+                "image": "f2c/myapp:abc123",
+                "status": "Up 1 hour",
+                "hostPort": 20001
+              }
+            ],
+            "databases": [],
+            "volumes": [
+              "f2c-f2c-myapp-data"
+            ],
+            "caddyHosts": [
+              "myapp.example.com"
+            ]
+          }
+        }
+      ],
+      "description": "POST <engine>/agent/reattach"
+    },
+    "reattachResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "orphanId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true,
+      "examples": [
+        {
+          "status": "pending",
+          "orphanId": "orph_EXAMPLE",
+          "message": "waiting for admin approval"
+        },
+        {
+          "status": "already_known",
+          "code": "already_known"
+        }
+      ],
+      "description": "201 (recorded) or 409 with status/code already_known."
+    }
+  }
+}
