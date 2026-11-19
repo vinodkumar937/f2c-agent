@@ -49,7 +49,7 @@ type volumeMount struct {
 	ReadOnly bool
 }
 
-// runOptions are the step 9d `run` options: an f2c-* network, named f2c-* volumes, cmd and labels.
+// runOptions are the `run` options: an f2c-* network, named f2c-* volumes, cmd and labels.
 type runOptions struct {
 	Network string
 	Volumes []volumeMount
@@ -289,8 +289,8 @@ type containerInfo struct {
 }
 
 // Fixed host ports: the engine allocates one per app and server inside this range (below Docker's random
-// range 32768+), so Docker restarts (restart policy, OOM kill) keep the same port. 0 = legacy random port.
-// The engine allocates from the same range (docs/protocol.md); keep the two identical.
+// range 32768+), so Docker restarts (restart policy, OOM kill) keep the same port. 0 = a random port chosen by Docker.
+// The agent accepts only this range for a fixed port (docs/protocol.md, `run`).
 const (
 	hostPortMin = 20000
 	hostPortMax = 29999

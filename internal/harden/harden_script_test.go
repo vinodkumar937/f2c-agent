@@ -6,7 +6,7 @@ import (
 )
 
 // TestHardenScriptHelpers runs deploy/test/harden_test.sh: the pure bash helpers of deploy/harden.sh (SSH lockout
-// checks for H1, fail2ban merge for H3), sourced with F2C_HARDEN_LIB=1 so nothing on the host is touched.
+// checks, fail2ban merge), sourced with F2C_HARDEN_LIB=1 so nothing on the host is touched.
 func TestHardenScriptHelpers(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {

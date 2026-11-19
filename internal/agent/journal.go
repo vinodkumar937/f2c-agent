@@ -1,6 +1,6 @@
 package agent
 
-// Resend safety (docs/protocol.md 6.3, protocol item #10): a persisted record of commands in flight (running.json) and of
+// Resend safety (docs/protocol.md 6.3): a persisted record of commands in flight (running.json) and of
 // finished results (done.json), so that a re-sent command id is never executed twice by accident.
 
 import (

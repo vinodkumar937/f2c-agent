@@ -2,7 +2,7 @@ package build
 
 // Dockerfile builds for customer apps (buildPack "dockerfile"). The engine sends buildPack, dockerfileLocation (relative to
 // the build directory the context was packed from; default /Dockerfile), dockerTargetBuild and noCache with the `build`
-// command (engine pipeline/build.ts); parseBuildSettings validates them (build_config.go). The agent re-validates the path
+// command; parseBuildSettings validates them (build_config.go). The agent re-validates the path
 // against the unpacked context (no "..", no symlink escapes) and runs `docker build -f <file> [--target T] [--no-cache]`.
 //
 // Build-time env never goes on the command line or in the log: every variable is a BuildKit secret read from a 0600
@@ -64,7 +64,7 @@ func validation(err error) error {
 	return protocol.BadRequest(err)
 }
 
-// cleanDockerfileLocation validates the dashboard value and returns the cleaned path relative to the build directory
+// cleanDockerfileLocation validates the engine-supplied value and returns the cleaned path relative to the build directory
 // ("/Dockerfile" -> "Dockerfile", "/docker/prod.Dockerfile" -> "docker/prod.Dockerfile"). "" or whitespace = "/Dockerfile".
 // Rejects "..", empty or "." segments, backslashes, control characters, odd characters and anything over 200 bytes.
 func cleanDockerfileLocation(v string) (string, error) {
@@ -278,14 +278,6 @@ func parseExposedPorts(content, target string) []int {
 		idx = stages[idx].parent
 	}
 	return nil
-}
-
-// firstExposedPort is the first EXPOSEd TCP port of the built stage, or 0.
-func firstExposedPort(content, target string) int {
-	if p := parseExposedPorts(content, target); len(p) > 0 {
-		return p[0]
-	}
-	return 0
 }
 
 // exposeToken: "8080", "8080/tcp", "3000-3005" -> 8080 / 8080 / 3000; "53/udp", "$PORT", "abc" -> 0.

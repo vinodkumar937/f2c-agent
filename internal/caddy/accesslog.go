@@ -1,8 +1,8 @@
 package caddy
 
-// Feature C: per-app request metrics from this server's Caddy. The engine-pushed Caddy config sends app-route
+// Per-app request metrics from this server's Caddy. The engine-pushed Caddy config sends app-route
 // access entries (JSON, client IPs/headers/token already removed by Caddy's filter encoder) to a TCP "net" writer on
-// 127.0.0.1:9181. We aggregate per host per minute and send finished minutes in the heartbeat ("access"); the engine
+// 127.0.0.1:9181. The agent aggregates per host per minute and send finished minutes in the heartbeat ("access"); the engine
 // maps hosts to apps (extra public-service domains are first reported under their app's primary host, accessmap.go). Nothing is written to disk.
 
 import (

@@ -187,7 +187,7 @@ func (a *Agent) wsURL() string {
 // ctx ends.
 func (a *Agent) Run(ctx context.Context, askListen, accessListen, caddyCerts string) {
 	go a.caddy.ServeAsk(ctx, askListen)
-	go caddy.ServeAccessLog(ctx, accessListen) // feature C
+	go caddy.ServeAccessLog(ctx, accessListen)
 	go a.caddy.Watch(ctx, caddyCerts)
 	go a.databases.Scheduler(ctx)
 	a.build.StartSweeper(ctx)
@@ -378,7 +378,7 @@ func (a *Agent) session(ctx context.Context) (accepted bool, _ error) {
 	}
 }
 
-// rotateToken (step 9g): persist the new server token, switch to it for the next connection, then confirm.
+// rotateToken: persist the new server token, switch to it for the next connection, then confirm.
 // The engine invalidates the old token only after this confirmation (or when the new one is first used), so a
 // lost reply can't lock the agent out; the current connection stays up throughout.
 func (a *Agent) rotateToken(m protocol.Message) {
@@ -519,15 +519,15 @@ func (a *Agent) heartbeat() {
 	hb["accessV"] = 1                         // Caddy access-log listener on 127.0.0.1:9181 (accesslog.go)
 	hb["dockerBuildV"] = build.DockerBuildCap // buildPack "dockerfile" builds (dockerbuild.go); older agents would silently run railpack
 	hb["composeV"] = docker.ComposeCap        // Docker Compose stacks (compose.go): stack run options, stack-v1 caps, network_rm, volume_rm, stats detail
-	hb["proxyV"] = 1                          // step 45: per-app proxy routes (subroute/authentication/headers/request_body) in caddy_apply
-	hb["hardenV"] = harden.SummaryVersion     // follow-up 9.3: hb.harden = {v, runs: last 5 harden runs, newest first} (harden.go)
+	hb["proxyV"] = 1                          // per-app proxy routes (subroute/authentication/headers/request_body) in caddy_apply
+	hb["hardenV"] = harden.SummaryVersion     // hb.harden = {v, runs: last 5 harden runs, newest first} (harden.go)
 	if hs := a.harden.SafeSummary(); hs != nil {
 		hb["harden"] = hs
 	}
 	if metrics.UsageDue() {
 		hb["apps"] = metrics.AppUsage(context.Background())
 	}
-	if rows := caddy.TakeAccessMinutes(time.Now()); len(rows) > 0 { // feature C: finished access-log minutes
+	if rows := caddy.TakeAccessMinutes(time.Now()); len(rows) > 0 { // finished access-log minutes
 		hb["access"] = rows
 	}
 	a.send(hb)

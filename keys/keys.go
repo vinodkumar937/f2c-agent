@@ -104,9 +104,6 @@ func Parse(b []byte) (*File, error) {
 // Release returns the embedded keys file.
 func Release() (*File, error) { return Parse(embedded) }
 
-// Embedded returns the raw bytes of the embedded file (a release ships the same bytes as release-keys.json).
-func Embedded() []byte { return append([]byte(nil), embedded...) }
-
 // Trusted lists the keys that may verify a signature: active and retired, never revoked.
 func (f *File) Trusted() []Key {
 	var out []Key

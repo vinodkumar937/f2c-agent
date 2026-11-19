@@ -1,6 +1,6 @@
 package caddy
 
-// Step 4 (on-demand "other" servers): Let's Encrypt rate-limit support.
+// On-demand ("other") servers: Let's Encrypt rate-limit support.
 // - watchCerts discovers ACME certs and reports each newly seen one
 //   ({t:"cert_issued", host, issuedAt, expiresAt}) to the engine.
 // - Discovery prefers a TLS dial to 127.0.0.1:443 with SNI (no filesystem permissions).
@@ -50,7 +50,7 @@ type Manager struct {
 	send       func(any) bool
 	hasConn    func() bool
 
-	// Hosts this server may get certificates for (step 9e), from the last caddy_apply.
+	// Hosts this server may get certificates for from the last caddy_apply.
 	askMu    sync.RWMutex
 	askHosts map[string]bool
 }

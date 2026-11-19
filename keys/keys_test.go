@@ -93,7 +93,7 @@ func TestKeyID(t *testing.T) {
 	}
 }
 
-// Drift check (#20): the block in deploy/install.sh is exactly what the keys file generates. release.sh runs the same check
+// Drift check: the block in deploy/install.sh is exactly what the keys file generates. release.sh runs the same check
 // (`ed25519tool check-install`). Fix a failure with `go run ./cmd/ed25519tool sync-install`.
 func TestInstallScriptBlockMatchesKeysFile(t *testing.T) {
 	f, err := Release()

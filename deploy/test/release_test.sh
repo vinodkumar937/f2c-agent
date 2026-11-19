@@ -19,6 +19,7 @@ eq unknown-flag "$(run bash "$R" 0.4.0 --nope)" 2
 # no key and no --no-sign: hard failure before anything is built
 eq missing-key-fails "$(run env F2C_RELEASE_SIGNING_KEY="$T/none.pem" bash "$R" 0.4.0)" 1
 eq missing-key-message "$(grep -c "no signing key at $T/none.pem" "$T/err")" 1
+eq missing-key-names-env-var "$(grep -c -- 'F2C_RELEASE_SIGNING_KEY' "$T/err")" 1
 eq missing-key-still-names-no-sign "$(grep -c -- '--no-sign' "$T/err")" 1
 eq missing-key-builds-nothing "$(grep -c 'building linux' "$T/out")" 0
 # an unreadable key path (a directory) is the same error

@@ -1,6 +1,6 @@
 package caddy
 
-// Step 9e: per-server routing support. The engine pushes this server's Caddy config with caddy_apply plus the list
+// Per-server routing support. The engine pushes this server's Caddy config with caddy_apply plus the list
 // of public hosts on this server; the local Caddy's on-demand TLS asks GET /tls/ask?domain=<host> here (127.0.0.1
 // only), so this server only ever obtains certificates for its own hosts. http_probe lets the engine health-check
 // apps through this server's Caddy.
@@ -97,7 +97,7 @@ func (a *Manager) askAllowed(domain string) bool {
 	a.askMu.RLock()
 	defer a.askMu.RUnlock()
 	h := strings.ToLower(strings.TrimSuffix(domain, "."))
-	return a.askHosts[h] && issuanceAllowed(h) // step 4: capped registered domain -> only hosts with a cert
+	return a.askHosts[h] && issuanceAllowed(h) // capped registered domain -> only hosts with a cert
 }
 
 // askHandler answers Caddy's on-demand TLS permission check: 200 = issue, 404 = refuse.

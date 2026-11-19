@@ -47,33 +47,33 @@ func (a *Agent) execute(ctx context.Context, m protocol.Message) (any, error) {
 		return a.caddy.Apply(ctx, args)
 	case "cert_install":
 		return a.caddy.CertInstall(args)
-	case "tls_warm": // step 4 (certwatch.go)
+	case "tls_warm": // certwatch.go
 		return a.caddy.TLSWarm(ctx, args)
 	case "http_probe":
 		return a.caddy.HTTPProbe(ctx, args)
-	case "build": // engine-multimode M2.1 (build.go)
+	case "build": // build.go
 		return a.build.Build(ctx, m.ID, args)
-	case "load": // engine-multimode M2.5 (transfer.go)
+	case "load": // transfer.go
 		return a.build.Load(ctx, m.ID, args)
-	case "image_present": // engine-multimode M2.6 (load.go)
+	case "image_present": // load.go
 		return build.ImagePresent(ctx, args)
-	case "self_update": // admin "Update agent" (selfupdate.go)
+	case "self_update": // selfupdate.go
 		return a.update.SelfUpdate(ctx, m.ID, args)
 	case "rename": // zero-downtime deploys: <app>-next -> <app> after the swap
 		return docker.Rename(ctx, args)
-	case "restart_agent": // dashboard "Restart agent": reply, then exit; systemd (Restart=always) starts it again
+	case "restart_agent": // reply, then exit; systemd (Restart=always) starts it again
 		scheduleAgentRestart()
 		return map[string]any{"restarting": true}, nil
 	case "network_rm": // composeV: remove a stack network (compose.go)
 		return docker.NetworkRm(ctx, args)
 	case "volume_rm": // composeV: remove one stack volume on an explicit delete (compose.go)
 		return docker.VolumeRm(ctx, args)
-	case "volumes_list": // item 6c: admin volume inventory (volumes.go); needs agent rebuild
+	case "volumes_list": // volume inventory (volumes.go)
 		return docker.VolumesList(ctx, args)
 	case "harden": // optional "Harden server" (harden.go): request -> root f2c-harden.path/.service -> JSON result
 		return a.harden.Run(ctx, args)
 	}
-	// Text kept exactly: packages/core byo.ts and the engine match /unknown command/ until they read "code".
+	// Text kept exactly: engines that predate "code" match /unknown command/ on it.
 	return nil, protocol.WithCode(protocol.CodeUnknownCommand, fmt.Errorf("unknown command type %q", m.Type))
 }
 

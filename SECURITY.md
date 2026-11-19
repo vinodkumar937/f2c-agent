@@ -6,7 +6,6 @@ Please report security problems **privately**, not in a public issue or pull req
 
 - Email: **info@f2c.io**
 - Or use GitHub private vulnerability reporting: the repository's **Security** tab, **Report a vulnerability**.
-  (This is enabled once the repository is public.)
 
 Include the agent version (`f2c-agent version`), what you did, what you expected and what happened. Never include tokens, join tokens
 (`f2cj_...`), server tokens (`f2cs_...`), private keys or other secrets in a report; describe where they appear instead.

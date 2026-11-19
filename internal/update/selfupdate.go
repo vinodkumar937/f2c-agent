@@ -1,6 +1,6 @@
 package update
 
-// Self-update (admin "Update agent"): the engine sends {type:"self_update", args:{sha256}}. The agent downloads
+// Self-update: the engine sends {type:"self_update", args:{sha256}}. The agent downloads
 // <engine>/agent/bin/SHA256SUMS (+ .sig) and verifies the ed25519 signature with the embedded release public key,
 // then downloads <engine>/agent/bin/<arch> (+ .sha256), checks the hash against both the signed SUMS and the
 // expected sha256, smoke-tests the new binary (`version`), keeps the running one as <bin>.prev, renames the new
@@ -119,16 +119,6 @@ func fetchBytes(ctx context.Context, client *http.Client, url string, max int64)
 		return nil, protocol.WithCode(protocol.CodeTransferFailed, errors.New("response too large"))
 	}
 	return b, nil
-}
-
-// verifySignedSHA256SUMS verifies the release signature (see verifySignedRelease) and returns the digest map.
-// baseURL is e.g. https://engine/agent/bin (no trailing slash).
-func verifySignedSHA256SUMS(ctx context.Context, client *http.Client, baseURL string) (map[string]string, error) {
-	r, err := verifySignedRelease(ctx, client, baseURL)
-	if err != nil {
-		return nil, err
-	}
-	return r.Files, nil
 }
 
 // Updater holds what self-update needs from the agent: the state dir and the current engine URL.

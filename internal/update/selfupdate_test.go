@@ -12,6 +12,16 @@ import (
 	"testing"
 )
 
+// verifySignedSHA256SUMS verifies the release signature (see verifySignedRelease) and returns the digest map.
+// baseURL is e.g. https://engine/agent/bin (no trailing slash).
+func verifySignedSHA256SUMS(ctx context.Context, client *http.Client, baseURL string) (map[string]string, error) {
+	r, err := verifySignedRelease(ctx, client, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return r.Files, nil
+}
+
 func b64pub(k ed25519.PublicKey) string { return base64.StdEncoding.EncodeToString(k) }
 
 func newKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {

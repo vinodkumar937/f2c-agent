@@ -20,7 +20,7 @@ import (
 
 // All keys in these tests are generated in memory (never written to disk).
 
-// The shared vectors (also run by the engine's TypeScript port) decide the guard.
+// The shared vectors (an engine implementing the same guard should run them too) decide the guard.
 func TestGuardSharedVectors(t *testing.T) {
 	raw, err := os.ReadFile("../../docs/protocol/testdata/version-compare.json")
 	if err != nil {
@@ -44,7 +44,7 @@ func TestGuardSharedVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(f.Cases) != 28 {
-		t.Fatalf("want the 28 agreed cases, have %d", len(f.Cases))
+		t.Fatalf("want the 28 cases of version-compare.json, have %d", len(f.Cases))
 	}
 	for _, c := range f.Cases {
 		floor := ""
@@ -85,21 +85,21 @@ func TestParseHeader(t *testing.T) {
 
 func TestFloorFile(t *testing.T) {
 	dir := t.TempDir()
-	if Floor(dir) != "" {
+	if readFloor(dir) != "" {
 		t.Fatal("no floor yet")
 	}
 	raiseFloor(dir, "0.3.1", "0.4.0")
 	raiseFloor(dir, "0.3.0", "x") // never lowers
 	raiseFloor(dir, "garbage", "x")
 	raiseFloor(dir, "", "x")
-	if Floor(dir) != "0.3.1" {
-		t.Fatalf("floor %q", Floor(dir))
+	if readFloor(dir) != "0.3.1" {
+		t.Fatalf("floor %q", readFloor(dir))
 	}
 	raiseFloor(dir, "0.4.0", "0.4.1")
-	if Floor(dir) != "0.4.0" {
-		t.Fatalf("floor %q", Floor(dir))
+	if readFloor(dir) != "0.4.0" {
+		t.Fatalf("floor %q", readFloor(dir))
 	}
-	if err := os.WriteFile(floorPath(dir), []byte("{not json"), 0o600); err != nil || Floor(dir) != "" {
+	if err := os.WriteFile(floorPath(dir), []byte("{not json"), 0o600); err != nil || readFloor(dir) != "" {
 		t.Fatal("an unreadable floor file counts as no floor")
 	}
 }

@@ -139,7 +139,7 @@ func runGolden(t *testing.T, c goldenCase, proto int) (any, error) {
 	return a.execute(ctx, protocol.Message{ID: "g1", Type: c.typ, Args: c.args})
 }
 
-// TestGoldenDump prints the protocol 0 frames as Go source for golden_data_test.go. Run it on the pre-#5 tree:
+// TestGoldenDump prints the protocol 0 frames as Go source for golden_data_test.go. Run it on a tree from before result codes at protocol >= 1 existed:
 //
 //	F2C_GOLDEN_DUMP=1 go test ./internal/agent -run TestGoldenDump -v
 func TestGoldenDump(t *testing.T) {

@@ -1,6 +1,6 @@
 package build
 
-// engine-multimode M2.2: build log streaming (batched, size-limited, redacted) and process-group control for builds.
+// Build log streaming (batched, size-limited, redacted) and process-group control for builds.
 // Lines go to the engine as the existing {t:"stream", id, data} frames, the same ones `logs` uses.
 
 import (

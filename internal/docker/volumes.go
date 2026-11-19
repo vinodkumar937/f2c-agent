@@ -1,8 +1,7 @@
 package docker
 
-// Item 6c: read-only Docker volume inventory for admin GET /v1/admin/servers/:id/volumes.
-// Reuses collectVolumeInventory (reattach.go). New command type "volumes_list" — needs agent
-// rebuild via release.sh --install at commit time.
+// Read-only Docker volume inventory for the `volumes_list` command.
+// Reuses collectVolumeInventory (reattach.go).
 
 import (
 	"context"

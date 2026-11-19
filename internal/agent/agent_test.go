@@ -19,8 +19,8 @@ func TestUnknownCommandCode(t *testing.T) {
 	if err == nil || err.Error() != `unknown command type "no_such_cmd"` {
 		t.Fatalf("text must stay exactly as before: %v", err)
 	}
-	if !regexp.MustCompile(`(?i)unknown command`).MatchString(err.Error()) { // engine API (byo.ts)
-		t.Fatal("byo.ts match broken")
+	if !regexp.MustCompile(`(?i)unknown command`).MatchString(err.Error()) { // engines that predate `code` match on this text
+		t.Fatal("the error text no longer matches /unknown command/")
 	}
 	if c := protocol.ResultCode(err); c != "unknown_command" {
 		t.Fatalf("code %q", c)

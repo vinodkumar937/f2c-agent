@@ -1,6 +1,6 @@
 {
  "v": 1,
- "about": "Shared test vectors for the #19 update guard: used by the Go agent (internal/version CompareBuild and the self_update decision) and by the engine's TypeScript port. Lives at docs/protocol/testdata/version-compare.json; the engine copy must stay identical.",
+ "about": "Shared test vectors for the self_update guard (docs/protocol.md section 8.4): used by this agent (internal/version CompareBuild and the self_update decision); an engine that implements the same guard should pass them too. Lives at docs/protocol/testdata/version-compare.json.",
  "rules": {
   "cmp": "sign of the semver precedence of target versus cur (build metadata ignored, a leading v is allowed); null when either side is not a valid semver or the target has no signed version",
   "build": "only when cmp == 0: 'newer' | 'older' | 'same' | 'unordered', the target's +build versus the current one. Both 12-digit UTC stamps (YYYYMMDDHHMM): numeric order. Both absent: 'same'. Anything else: 'unordered'.",

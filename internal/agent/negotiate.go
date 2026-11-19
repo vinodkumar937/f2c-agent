@@ -1,8 +1,8 @@
 package agent
 
 // Version negotiation (docs/protocol.md section 3): the agent sends X-F2C-Protocol on the dial, the engine's hello_ok may
-// answer with protocol, minAgent and caps. Today these only feed the log and the accessors below; no behaviour is gated
-// on them yet.
+// answer with protocol, minAgent and caps. The session protocol gates the result-code vocabulary and the replayed marker
+// (SessionProtocol); minAgent, serverId and caps only feed the log and the accessors below.
 
 import (
 	"log"

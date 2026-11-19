@@ -6,7 +6,7 @@ package caddy
 // route belongs to which app (the route "@id"), so on every successful apply we derive "service host -> the app's
 // primary host" and report extra-service traffic under the primary host. The heartbeat "access" rows keep their shape.
 //
-// Route ids the engine builds (agent-caddy.ts), each optionally prefixed "tls-" for the :443 server:
+// Route ids the engine builds, each optionally prefixed "tls-" for the :443 server:
 //   app-<app>                      the app's primary host (match.host[0])
 //   dom-<app>-<slug(host)>         another custom/default host of the primary service (the engine maps these itself)
 //   svcd-dom-<app>-<slug(host)>    a custom domain of a non-primary service  -> mapped to the parent app

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// route mirrors the engine's route shape (agent-caddy.ts): "@id" + match.host.
+// route mirrors the engine's route shape: "@id" + match.host.
 func route(id string, hosts ...string) any {
 	hl := make([]any, len(hosts))
 	for i, h := range hosts {

@@ -231,11 +231,11 @@ func TestParseExposedPortsDockerfile(t *testing.T) {
 			t.Errorf("%s: parseExposedPorts = %v, want %v", c.name, got, c.want)
 		}
 	}
-	if p := firstExposedPort("FROM x\nEXPOSE 9000 9001\n", ""); p != 9000 {
-		t.Errorf("firstExposedPort = %d", p)
+	if p := parseExposedPorts("FROM x\nEXPOSE 9000 9001\n", ""); len(p) == 0 || p[0] != 9000 {
+		t.Errorf("first exposed port = %v", p)
 	}
-	if p := firstExposedPort("FROM x\n", ""); p != 0 {
-		t.Errorf("firstExposedPort (none) = %d", p)
+	if p := parseExposedPorts("FROM x\n", ""); len(p) != 0 {
+		t.Errorf("exposed ports (none) = %v", p)
 	}
 }
 
@@ -273,8 +273,8 @@ func TestDockerfileTargetNotFound(t *testing.T) {
 		}
 	}
 	// the exposed port follows an index target too
-	if p := firstExposedPort("FROM a\nEXPOSE 1000\nFROM b\nEXPOSE 2000\n", "0"); p != 1000 {
-		t.Errorf("index target port = %d", p)
+	if p := parseExposedPorts("FROM a\nEXPOSE 1000\nFROM b\nEXPOSE 2000\n", "0"); len(p) == 0 || p[0] != 1000 {
+		t.Errorf("index target port = %v", p)
 	}
 }
 
@@ -286,7 +286,7 @@ func TestParseBuildSettingsDockerfileIgnoresOverrides(t *testing.T) {
 	}
 	args["buildPack"] = "dockerfile"
 	s, err = parseBuildSettings(args)
-	if err != nil || s.BuildCmd != "" || s.StartCmd != "" || s.OutDir != "" || s.hasOverrides() {
+	if err != nil || s.BuildCmd != "" || s.StartCmd != "" || s.OutDir != "" {
 		t.Fatalf("a Dockerfile build must ignore stored build/start/output overrides: %+v, %v", s, err)
 	}
 	if ra, _ := s.railpackArgs(); strings.Contains(strings.Join(ra, " "), "start-cmd") {

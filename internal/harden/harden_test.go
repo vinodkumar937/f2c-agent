@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vinodkumar937/f2c-agent/internal/protocol"
 )
 
 func TestParseHardenArgs(t *testing.T) {
@@ -325,5 +327,37 @@ func TestParseHardenUnit(t *testing.T) {
 	}
 	if (hardenUnit{ActiveState: "inactive"}).busy() || (hardenUnit{ActiveState: "failed"}).busy() {
 		t.Fatal("inactive/failed must not be busy")
+	}
+}
+
+// A request that cannot be written or renamed must fail at once with harden_script_failed (not wait for the result
+// timeout), release the busy lock and record the outcome.
+func TestRunFailsAtOnceWhenRequestCannotBeQueued(t *testing.T) {
+	for name, block := range map[string]func(dir string) error{
+		"write": func(dir string) error { return os.MkdirAll(filepath.Join(dir, ".request.tmp"), 0o700) },
+		"rename": func(dir string) error {
+			p := filepath.Join(dir, "request")
+			if err := os.MkdirAll(p, 0o700); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(p, "keep"), []byte("x"), 0o600) // a non-empty directory cannot be replaced
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, _ := setupHarden(t)
+			if err := block(filepath.Join(a.stateDir, "harden")); err != nil {
+				t.Fatal(err)
+			}
+			start := time.Now()
+			out, err := a.Run(context.Background(), map[string]any{"runId": "harden-q" + name, "mode": "dry_run"})
+			if took := time.Since(start); took > time.Second {
+				t.Fatalf("took %v: the failure must not wait for the %v result timeout", took, hardenTimeout)
+			}
+			failCode(t, out, err, protocol.CodeHardenScriptFailed, "harden: queue request")
+			if !hardenBusy.TryLock() {
+				t.Fatal("the busy lock was not released")
+			}
+			hardenBusy.Unlock()
+		})
 	}
 }

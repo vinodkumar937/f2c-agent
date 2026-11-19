@@ -1,6 +1,6 @@
 package docker
 
-// Step 9h: 24 h registry read credentials pushed by the engine over the live wss connection
+// 24 h registry read credentials pushed by the engine over the live wss connection
 // ("registry_login", never queued). They are written to <state-dir>/docker/config.json (0600, atomic)
 // and used only for `docker pull` via DOCKER_CONFIG. Never logged.
 

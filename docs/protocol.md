@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Specification version** | `1.0-draft` |
-| **Protocol version** | `1` (the only version; negotiated on the wire in agent and engine, unreleased; see [section 3](#3-versioning-and-negotiation)) |
-| **Status** | Draft. Derived from the code; the items in [section 11](#11-open-questions-and-inconsistencies) record where the agent and the reference engine were aligned. Everything marked "unreleased" is implemented but not yet published. |
-| **Basis** | Agent: `f2c-agent` v0.3.1 (`0.3.1+202611181227`, source commit `7f4d810`), plus the unreleased 0.4.0 changes. The reference (upstream) engine was read, not modified. |
+| **Protocol version** | `1` (the only version; negotiated on the wire since agent 0.4.0, see [section 3](#3-versioning-and-negotiation)) |
+| **Status** | Draft. Derived from the code; [section 11](#11-known-limitations-and-design-notes) lists known limitations and open design points. |
+| **Basis** | Agent: `f2c-agent` 0.4.0. |
 | **Date** | 2026-11-18 |
 
 Where this document and the code disagree, the code is right and this document has a bug. Where the agent and the engine
-disagree, or the behaviour is not defined, this document says so and lists it in [section 11](#11-open-questions-and-inconsistencies)
-instead of choosing. Nothing here changes the wire format or any code.
+disagree, or the behaviour is not defined, this document says so (see [section 11](#11-known-limitations-and-design-notes))
+instead of choosing.
 
 ## 1. Overview
 
@@ -50,14 +50,14 @@ examples are placeholders (`f2cs_EXAMPLE...`, `example.com`, `192.0.2.x`).
 ### 1.4 Versioning of this specification
 
 The specification version has the form `<major>.<minor>[-draft]`. The **protocol version** is the integer `1`. A change that
-a receiver written against 1.x cannot tolerate would be protocol 2. Agents up to 0.3.1 send no wire-level version marker; from agent 0.4.0 (unreleased) the dial carries `X-F2C-Protocol: 1`. See
+a receiver written against 1.x cannot tolerate would be protocol 2. Agents up to 0.3.1 send no wire-level version marker; from agent 0.4.0 the dial carries `X-F2C-Protocol: 1`. See
 [section 3](#3-versioning-and-negotiation).
 
 ### 1.5 Changelog
 
 | Spec version | Date | Changes |
 |---|---|---|
-| `1.0-draft` | 2026-11-18 | First formal version. Replaces the informal "v1 (DRAFT)" notes. Adds the message catalogue with JSON Schemas, error codes, command lifecycle, reconnect rules, release and signature flow, security considerations and an open-questions list. No wire or code change. Revised the same day for the agent side of items 18 to 20 (signed `SHA256SUMS` header, key ids and `SHA256SUMS.sigs`, the `self_update` guard, `hb.updateV`; section 8), then for items 8 and 17 (size and truncation limits, [5.4](#54-size-and-truncation-limits-as-implemented); the full database channel, [4.8](#48-managed-database-channel) and `database.json`) and for the engine-side status of items 1 to 5, 9, 10 and 15 (implemented, unreleased). Documentation only: no wire or code change. |
+| `1.0-draft` | 2026-11-18 | First formal version: the message catalogue with JSON Schemas, error codes, command lifecycle, reconnect rules, release and signature flow (signed `SHA256SUMS` header, key ids and `SHA256SUMS.sigs`, the `self_update` guard, `hb.updateV`), size and truncation limits ([5.4](#54-size-and-truncation-limits-as-implemented)), the managed-database channel ([4.8](#48-managed-database-channel) and `database.json`), security considerations and a list of known limitations. |
 
 ## 2. Transport and session
 
@@ -118,7 +118,7 @@ Authorization: Bearer f2cs_EXAMPLE_NOT_A_REAL_TOKEN
   proxy that does not mark it as `https`.
 - **TLS.** `wss` uses the Go TLS stack with the system trust store. There is no certificate pinning and no client certificate.
   Dial timeout: 20 s (covers TCP, TLS and the upgrade).
-- **Protocol header.** `X-F2C-Protocol: 1`, the highest protocol version the agent speaks (*implemented in agent and engine, unreleased*). Older agents do not send it, so an engine MUST treat a missing header as protocol 0. See [section 3](#3-versioning-and-negotiation).
+- **Protocol header.** `X-F2C-Protocol: 1`, the highest protocol version the agent speaks (since agent 0.4.0). Older agents do not send it, so an engine MUST treat a missing header as protocol 0. See [section 3](#3-versioning-and-negotiation).
 - **Not sent:** any subprotocol and any agent identity header.
 - **Token source.** The token is re-read for every dial, so a rotated token ([4.5](#45-secret-bearing-live-frames)) takes effect on the next connection.
 
@@ -132,9 +132,9 @@ The agent sends **no** hello frame. The sequence after a successful upgrade is:
 4. Engine: pushes the server's current Caddy routes as a normal `caddy_apply` command, and pushes registry credentials as `registry_login`.
 5. Agent, on `hello_ok`: starts the harden link monitor (a WebSocket ping every 10 s with a 5 s timeout, recorded in `<state-dir>/harden/link-proof`; only when the engine URL is `https`) and
    marks a pending self-update as proven ([section 8.4](#84-self-update-and-rollback)). It also records `protocol` and `caps` for the session and compares `minAgent` with its own version
-   ([3.2](#32-negotiation-implemented-in-agent-and-engine-unreleased)); this only changes the log.
+   ([3.2](#32-negotiation)); this only changes the log.
 
-From agent 0.4.0 (unreleased) the agent compares `serverId` in `hello_ok` with its configured server id and warns on a mismatch ([3.2](#32-negotiation-implemented-in-agent-and-engine-unreleased)); older agents ignore it. A repeated `hello_ok` on one connection is processed again; the engine sends one per connection.
+From agent 0.4.0 the agent compares `serverId` in `hello_ok` with its configured server id and warns on a mismatch ([3.2](#32-negotiation)); older agents ignore it. A repeated `hello_ok` on one connection is processed again; the engine sends one per connection.
 
 ### 2.5 Framing
 
@@ -159,9 +159,9 @@ All field names are case-sensitive and exactly as written in this document.
 | WebSocket `Ping` | Engine | every 20 s | The agent library answers with `Pong` while its read loop runs. |
 | Idle timeout | Engine | checked every 20 s | Any inbound frame or `Pong` counts as activity. If none arrived within 60 s the engine closes with `4001 "idle"`, so a silent link is dropped after 60 to 80 s. |
 | WebSocket `Ping` (link monitor) | Agent | every 10 s, 5 s timeout | Only after `hello_ok` and only for `https` engines. A success refreshes `harden/link-proof`; a failure does nothing else (the connection is not closed). |
-| WebSocket `Ping` (dead-link check) | Agent | every **20 s**, **10 s** timeout | *Implemented in the agent, unreleased.* Runs next to the read loop for the whole connection. If the engine does not answer within the timeout, the agent closes the connection with `1001 "ping timeout"` and reconnects on the normal schedule ([7.1](#71-backoff-and-retry-schedules)). The engine's WebSocket layer answers every `Ping` with a `Pong` that echoes the payload, so no engine change is needed. |
+| WebSocket `Ping` (dead-link check) | Agent | every **20 s**, **10 s** timeout | *Since agent 0.4.0.* Runs next to the read loop for the whole connection. If the engine does not answer within the timeout, the agent closes the connection with `1001 "ping timeout"` and reconnects on the normal schedule ([7.1](#71-backoff-and-retry-schedules)). The engine's WebSocket layer answers every `Ping` with a `Pong` that echoes the payload, so no engine change is needed. |
 
-**Dead-link check (implemented in the agent, unreleased; before it the agent had no timer that closed a silent connection).** A silent link is
+**Dead-link check (since agent 0.4.0; earlier agents had no timer that closed a silent connection).** A silent link is
 detected after at most about 30 s (one ping interval plus the timeout), instead of waiting for the engine's `4001` after 60 to 80 s. A missed pong is
 **ignored** (the check is inconclusive and the next ping decides) when the read loop was busy in a synchronous handler (`rotate_token`,
 `registry_login`, `dns_token`) or when any frame arrived while the ping was waiting, because the reader cannot return a pong while it is occupied and
@@ -172,13 +172,13 @@ is unchanged. Nothing new is sent in any JSON frame.
 
 | Code | Sent by | Meaning | Agent behaviour |
 |---|---|---|---|
-| `1001` | Agent | `"ping timeout"`: the dead-link check got no pong (implemented in the agent, unreleased). | Reconnect on the normal schedule. |
+| `1001` | Agent | `"ping timeout"`: the dead-link check got no pong (since agent 0.4.0). | Reconnect on the normal schedule. |
 | `1003` | Engine | Binary frame received. | Reconnect on the normal schedule. |
 | `1009` | Engine | Message larger than 16 MiB. | Reconnect on the normal schedule. |
-| `4000` | Engine | Replaced by a newer connection for the same server. | Wait a random **30 to 90 s**, then reconnect; the log says another agent may be using this token (implemented in the agent, unreleased; see [7.1](#71-backoff-and-retry-schedules)). |
+| `4000` | Engine | Replaced by a newer connection for the same server. | Wait a random **30 to 90 s**, then reconnect; the log says another agent may be using this token (since agent 0.4.0; see [7.1](#71-backoff-and-retry-schedules)). |
 | `4001` | Engine | Idle for more than 60 s. | Reconnect on the normal schedule. |
-| `4004` | Engine | `"protocol_unsupported"`: the engine cannot speak any protocol version the agent offers in `X-F2C-Protocol` (*implemented in agent and engine, unreleased*). | Reconnect on the slow **auth schedule** (60 s doubling to 10 min, jittered) with its own log line asking for an agent update; the agent never stops by itself. See [7.1](#71-backoff-and-retry-schedules). |
-| `4003` | Engine | Server revoked, or its token rotated away. | Reconnect on the slow **auth schedule**; the agent never stops by itself (implemented in the agent, unreleased; see [7.1](#71-backoff-and-retry-schedules)). |
+| `4004` | Engine | `"protocol_unsupported"`: the engine cannot speak any protocol version the agent offers in `X-F2C-Protocol` (since agent 0.4.0). | Reconnect on the slow **auth schedule** (60 s doubling to 10 min, jittered) with its own log line asking for an agent update; the agent never stops by itself. See [7.1](#71-backoff-and-retry-schedules). |
+| `4003` | Engine | Server revoked, or its token rotated away. | Reconnect on the slow **auth schedule**; the agent never stops by itself (since agent 0.4.0; see [7.1](#71-backoff-and-retry-schedules)). |
 
 Any other close or read error is logged and followed by a reconnect on the normal schedule. The engine never sends `403`; the agent treats it like `401` in case a proxy does.
 
@@ -199,23 +199,23 @@ Any other close or read error is logged and followed by a reconnect on the norma
 | `dockerBuildV` | `build` with `buildPack: "dockerfile"` | yes (gates Dockerfile builds) |
 | `composeV` | Compose stack options of `run`, `network_rm`, `volume_rm`, `stats` detail | yes (gates stack specs) |
 | `proxyV` | per-app proxy routes inside `caddy_apply` config | yes |
-| `hardenV` | `hb.harden` summary | yes in the unreleased engine, which gates `harden` on it ([open question 3](#11-open-questions-and-inconsistencies)) |
+| `hardenV` | `hb.harden` summary | an engine may gate `harden` on it |
 
 - **No protocol number in agents up to 0.3.1.** Those agents send no version on the wire. Compatibility there is carried by additive fields, by the capability flags above, and by the
-  rule that unknown commands are answered with `unknown_command` ([section 5](#5-error-codes-and-retry-semantics)). Negotiation ([3.2](#32-negotiation-implemented-in-agent-and-engine-unreleased)) adds a number without removing any of this.
+  rule that unknown commands are answered with `unknown_command` ([section 5](#5-error-codes-and-retry-semantics)). Negotiation ([3.2](#32-negotiation)) adds a number without removing any of this.
 - **Unknown command types.** An agent that does not know a command type still sends `ack`, then `result` `ok:false` with `code: "unknown_command"` at protocol 0 and `code: "unknown_cmd"` at protocol >= 1 (never both).
-  The error text is `unknown command type "<type>"` in both cases and is kept stable because engines that predate `code` match on text; the unreleased engine reads `code` first and falls back to the text only for a result without one ([open question 2](#11-open-questions-and-inconsistencies)).
+  The error text is `unknown command type "<type>"` in both cases and is kept stable because engines that predate `code` match on text; an engine should read `code` first and fall back to the text only for a result without one.
 - **Command-specific arguments.** New optional arguments added to a command are silently ignored by an older agent for every command except `run`, which rejects unknown keys ([4.9.2](#492-run)).
 
-### 3.2 Negotiation (implemented in agent and engine, unreleased)
+### 3.2 Negotiation
 
-> **Implemented in agent and engine, unreleased.** Agents up to 0.3.1 do none of this, and the released engine sends none of the new `hello_ok` fields. The unreleased engine reads the header, sends `protocol`, `minAgent` (from its pin), `caps` (`notAfter`, `hardenSummary`, `resultCode`) and `serverId`, and closes `4004` when it can speak no offered version. The design is additive: no existing field changes meaning.
+> **Since agent 0.4.0.** Agents up to 0.3.1 do none of this, and an engine that predates it sends none of the new `hello_ok` fields. An engine that implements negotiation reads the header, sends `protocol`, `minAgent`, `caps` (`notAfter`, `hardenSummary`, `resultCode`) and `serverId`, and closes `4004` when it can speak no offered version. The design is additive: no existing field changes meaning.
 
 1. **Dial header.** The agent sends `X-F2C-Protocol: 1`, the highest protocol it speaks (constant `protocol.Version`). A missing header means protocol 0 (an older agent).
 2. **`hello_ok` answer** ([4.2](#42-hello_ok)), all optional:
    - `protocol` (integer): the session version, set by the engine to min(agent, engine highest). A missing or invalid value means **0**. The agent exposes the result as `SessionProtocol()` so that later features can require protocol >= 1.
    - `minAgent` (semver string): the engine's minimum agent version, from its pinned release. If the agent's own version is lower (semver precedence; `+build` metadata ignored), the agent logs **one warning per session** and **keeps running**. It does **not** self-update because of it.
-   - `caps` (array of strings): engine features. Values: `"notAfter"`, `"hardenSummary"` and `"resultCode"` (all three live in the unreleased engine at protocol >= 1; at protocol 0 the engine sends none of them). The agent exposes `EngineHas(cap)`. Unknown strings are ignored.
+   - `caps` (array of strings): engine features. Values: `"notAfter"`, `"hardenSummary"` and `"resultCode"` (all three are sent by engines that implement them, at protocol >= 1 only; at protocol 0 the engine sends none of them). The agent exposes `EngineHas(cap)`. Unknown strings are ignored.
    - `serverId` (string): the engine's id for the server. If it is present and **differs** from the server id in the agent's `agent.json`, the agent logs **one warning per session** (naming both ids, which are not secrets) and **keeps the session open**. A missing, empty, non-string or over-long (more than 128 bytes) value, or a match, does nothing.
 3. **Close `4004` `"protocol_unsupported"`** ([2.7](#27-close-codes)): the engine's refusal when it cannot speak any offered version. The agent treats it like an auth failure for retry purposes (slow, jittered, never stops; [7.1](#71-backoff-and-retry-schedules)). `4001` (idle) stays on the normal schedule.
 4. **What is gated on the result.** Two things: the result-code vocabulary, and the `replayed` marker on re-sent results ([6.3](#63-duplicate-ids-and-replay)). At `SessionProtocol() >= 1` every `ok:false` `result` carries a code from the 27-code list, and the three live reply frames carry `code` on failure ([5.1](#51-resultcode), [5.2](#52-other-error-channels)); at protocol 0 the agent sends exactly what 0.3.1 sends. The `resultCode` capability is advertised by the engine but not consulted by the agent: the gate is the session protocol. Everything else is unchanged by the negotiated protocol and caps, which also feed the log and the two accessors. Unknown `hello_ok` fields are ignored, as before.
@@ -227,7 +227,7 @@ Rules for the engine: treat a missing `X-F2C-Protocol` as 0; send `protocol` no 
 
 Not part of negotiation:
 
-- the downgrade guard is not a negotiation rule: it shipped as the `self_update` guard and signed floor of [8.4](#84-self-update-and-rollback) (agent 0.4.0, item 19; engine side in progress);
+- the downgrade guard is not a negotiation rule: it is the `self_update` guard and signed floor of [8.4](#84-self-update-and-rollback) (agent 0.4.0);
 - any rule that makes the agent stop or refuse to connect for an engine it is too old for. `minAgent` only warns.
 
 ## 4. Message catalogue
@@ -262,14 +262,14 @@ Console and database frame schemas are all in [`frames.json`](protocol/schemas/f
 ### 4.2 `hello_ok`
 
 E>A. Sent once after the upgrade. `serverId` is the engine's id for the server. The other fields below are optional and additive
-(*implemented in agent and engine, unreleased*). An engine that sends only `serverId` is protocol 0.
+(since agent 0.4.0). An engine that sends only `serverId` is protocol 0.
 
 | Field | Type | Meaning | Agent when missing or wrong |
 |---|---|---|---|
 | `protocol` | integer | The session version: min(the agent's `X-F2C-Protocol`, the engine's highest), so `1` today. | Protocol `0`. A fractional, negative, string or `null` value counts as invalid. A value above what the agent speaks is clamped to it. |
 | `minAgent` | string, semver | The oldest agent the engine wants, taken from its pinned release. | No check. A value that is not a valid semver is ignored. |
 | `serverId` | string | The engine's id for this server (already sent by every engine). | No check. If present and different from the configured id, one warning per session; the session stays open. Empty, non-string and over-long values are treated as missing. |
-| `caps` | array of strings | Engine features. Known: `"notAfter"`, `"hardenSummary"` and `"resultCode"` (all live in the unreleased engine at protocol >= 1). | Empty set. Entries that are not strings are skipped and unknown strings are kept and ignored. At most 64 entries of 64 bytes are kept. |
+| `caps` | array of strings | Engine features. Known: `"notAfter"`, `"hardenSummary"` and `"resultCode"` (sent at protocol >= 1 only). | Empty set. Entries that are not strings are skipped and unknown strings are kept and ignored. At most 64 entries of 64 bytes are kept. |
 
 A wrong type in any of these fields (including `serverId`) never drops the frame or the session: the agent decodes them separately from the rest of the frame.
 
@@ -294,7 +294,7 @@ A>E. Sent immediately after connecting and every 15 s. If the connection is down
 | `updateV` | integer | `1`: `self_update` honours `version`, `rollback` and `reason` at protocol >= 1 and the agent keeps the signed floor ([8.4](#84-self-update-and-rollback)). The engine sends those arguments only to agents that report it. |
 | `cpuCount`, `arch` | integer, string | `arch` is `amd64` or `arm64`. |
 | `memoryMb`, `diskGb`, `cpuPct`, `memUsedMb`, `diskUsedGb` | number | Host metrics. |
-| `containers` | array or `null` | Managed containers `{name, state, image, status, hostPort?}`. `null` when `docker ps` failed (open question 23). |
+| `containers` | array or `null` | Managed containers `{name, state, image, status, hostPort?}`. `null` when `docker ps` failed ([section 11](#11-known-limitations-and-design-notes)). |
 | `usageV` ... `hardenV` | integer | Capability flags ([3.1](#31-what-exists-today)). |
 | `harden` | object | **Harden summary** `{v: 1, runs: [...]}`: the last 5 harden runs, newest first, each `{id, status, finishedAt?, backupId?}` with `status` one of `requested`, `succeeded`, `failed`, `rolled_back`, `unknown`. Omitted if it cannot be built. Not read by the engine. |
 | `apps` | array | Per-app usage rows. Present on every 4th beat, starting with the first. |
@@ -304,7 +304,7 @@ A>E. Sent immediately after connecting and every 15 s. If the connection is down
 has ended it is sent once in `hb.access` and then forgotten (a beat lost while disconnected loses its rows). A row has `host`, `minute` (RFC 3339 start of the minute),
 `requests`, `s2xx`, `s3xx`, `s4xx`, `s5xx`, `bytes`, `p50Ms`, `p95Ms` (milliseconds, `null` without samples). For apps that publish more than one domain the agent reports
 every domain's traffic under the app's **primary host**, derived from the route `@id` values in the last `caddy_apply` (`app-`, `dom-`, `svcd-dom-`, `redir-` prefixes, with an optional `tls-` prefix); the engine's
-host to app map is therefore enough (open question 24). Schemas: [`accessRow`](protocol/schemas/frames.json#/$defs/accessRow), [`appUsage`](protocol/schemas/frames.json#/$defs/appUsage), [`hbHarden`](protocol/schemas/frames.json#/$defs/hbHarden).
+host to app map is therefore enough. Schemas: [`accessRow`](protocol/schemas/frames.json#/$defs/accessRow), [`appUsage`](protocol/schemas/frames.json#/$defs/appUsage), [`hbHarden`](protocol/schemas/frames.json#/$defs/hbHarden).
 
 <!-- example: frames.json hb -->
 ```json
@@ -326,8 +326,8 @@ host to app map is therefore enough (open question 24). Schemas: [`accessRow`](p
 ### 4.4 Command frames
 
 **`cmd`** (E>A) `{t, id, type, args?, notAfter?}`. `id` is chosen by the engine and MUST be unique per command; the engine only issues ids matching `^[A-Za-z0-9_.:-]{1,80}$` and the agent accepts any non-empty string. `args` defaults to `{}`.
-`notAfter` is an optional absolute RFC 3339 deadline (see [6.4](#64-notafter-and-skew)); **the unreleased engine sets it on every command** (absolute, by command type, at least the caller's wait, at most 24 h; the released engine never did; [open question 1](#11-open-questions-and-inconsistencies)). A frame with a missing `id` is dropped silently.
-The agent also drops silently any frame whose known fields have the wrong JSON type (for example `args` that is not an object), because the whole frame fails to decode (open question 7).
+`notAfter` is an optional absolute RFC 3339 deadline (see [6.4](#64-notafter-and-skew)); an engine should set it on every command ([6.4](#64-notafter-and-skew)). A frame with a missing `id` is dropped silently.
+The agent also drops silently any frame whose known fields have the wrong JSON type (for example `args` that is not an object), because the whole frame fails to decode ([section 11](#11-known-limitations-and-design-notes)).
 
 **`ack`** (A>E) `{t, id}`. Sent when the agent has accepted the command and started it. It is also sent again if a `cmd` arrives for an id that is still running. It carries no data.
 
@@ -374,7 +374,7 @@ synchronously in the agent's read loop.
 - **`rotate_token`** `{t, id, token}` (E>A). `token` MUST start with `f2cs_` and be at most 256 characters; `id` MUST be non-empty. The agent writes the new token to `agent.json` (0600), uses it from the next dial,
   and answers **`token_rotated`** `{t, id, ok, error?}`. The current connection stays up. The engine invalidates the old token only after the confirmation or when the new one is first used.
 - **`registry_login`** `{t, id, config: {auths: {<registry host>: {auth}}}}` (E>A). A Docker `config.json` fragment of 1 to 4 registries (at most 16 KiB), stored 0600 in `<state-dir>/docker` and used only for `docker pull`. The agent replies with a frame of the **same** `t`:
-  `{t:"registry_login", id, ok, error?}` (open question 16). The engine refreshes the credentials periodically and at every connect.
+  `{t:"registry_login", id, ok, error?}` ([section 11](#11-known-limitations-and-design-notes)). The engine refreshes the credentials periodically and at every connect.
 - **`dns_token`** `{t, id, provider, domain, token}` (E>A), `provider` `digitalocean` or `cloudflare` (the agent also accepts `other`). Stored 0600 for the DNS-01 wildcard certificate. The agent replies **`dns_token_ok`** `{t, id, ok, error?}`.
 
 <!-- example: frames.json rotateToken -->
@@ -431,7 +431,7 @@ An interactive shell in a managed container, over the Docker Engine API with a T
 | `console_close` | E>A | `id` | Closes the session. |
 | `console_exit` | A>E | `id, reason` | `error`, `not_running` or `exited`. Also sent after `console_close` (reason `exited`). |
 
-Console frames have no ack and no dedupe. They are not re-sent. If the WebSocket drops, the agent keeps the exec running until it ends and the frames it produces meanwhile are lost (open question 12).
+Console frames have no ack and no dedupe. They are not re-sent. If the WebSocket drops, the agent keeps the exec running until it ends and the frames it produces meanwhile are lost ([7.2](#72-what-survives-a-reconnect)).
 
 <!-- example: frames.json consoleOpen -->
 ```json
@@ -445,7 +445,7 @@ Console frames have no ack and no dedupe. They are not re-sent. If the WebSocket
 
 ### 4.8 Managed-database channel
 
-*Specification of agent behaviour as implemented (item 17). The per-operation schemas are in [`database.json`](protocol/schemas/database.json). The engine's side (timeouts, gating) is described as observed and is informative.*
+*Specification of agent behaviour as implemented. The per-operation schemas are in [`database.json`](protocol/schemas/database.json). The engine's side (timeouts, gating) is informative.*
 
 Used for managed databases: a Postgres or Redis container named `f2c-db-<name>` with a volume `f2c-db-<name>-data`. Frames: `db_request` / `db_result`, and `db_socket_open` / `db_socket_in` / `db_socket_close` with `db_socket_ready` / `db_socket_out` / `db_socket_end`. The engine handles every frame whose `t` starts with `db_` in its database channel, not in the command queue.
 
@@ -500,16 +500,16 @@ On first use the identity is **pinned** in `<state>/databases/<org>/<name>/datab
 | `volume_backup_create` | no | `volume` | `{volume, size, location: "server", uploaded: false}` | Tars any volume named `f2c-*`; the archive is discarded afterwards. |
 | `volume_backup_offsite` | no | `volume`, `url`, `objectKey` | `{volume, size, uploaded: true, objectKey, location: "both"}` | Tars and PUTs. |
 
-**Not supported: `volume_backup_offsite_restore`.** The engine's customer off-site code sends this operation with `args {volume, url, objectKey}`, but **the agent does not implement it** and it is not in the table above or in `database.json`. The agent answers it like any unknown operation: the frame `{"t":"db_result","id":"<id>","ok":false,"code":"invalid_input","status":400}`, with no `data` and no text. It is `invalid_input` and not `unsupported` because the engine's arguments carry no `dbSpec`, and the agent validates the identity before it looks at the operation name; with a valid `dbSpec` the same request would get `code: "unsupported"`, `status: 409`. The answer is the same at protocol 0 and protocol 1, because the database channel does not depend on the session protocol. The engine disables that path until the operation is specified and agreed ([open question 25](#11-open-questions-and-inconsistencies)).
+**Not supported: `volume_backup_offsite_restore`.** An engine may send this operation with `args {volume, url, objectKey}`, but **the agent does not implement it** and it is not in the table above or in `database.json`. The agent answers it like any unknown operation: the frame `{"t":"db_result","id":"<id>","ok":false,"code":"invalid_input","status":400}`, with no `data` and no text. It is `invalid_input` and not `unsupported` because the engine's arguments carry no `dbSpec`, and the agent validates the identity before it looks at the operation name; with a valid `dbSpec` the same request would get `code: "unsupported"`, `status: 409`. The answer is the same at protocol 0 and protocol 1, because the database channel does not depend on the session protocol. An engine should not send it until the operation is specified (see [section 11](#11-known-limitations-and-design-notes)).
 
 **Backups on the server.** Dumps live in `<state>/databases/<org>/<name>/backups/<key>` with a `<key>.json` record `{key, size, createdAt, location, sha256}`; a key is `<UTC YYYYMMDDTHHMMSSZ>-<16 hex>.dump`. A dump is at most **2 GiB** and needs its size limit plus 1 GiB free; the newest **7** are kept (the dump being restored is never pruned). A scheduler wakes every minute and takes one dump per Postgres database per day at **02:00 UTC**; a failure is recorded as `lastBackupError` (`database_not_running` or `backup_failed`) and retried after 15 minutes. `.partial` and `.upload` files older than 24 h are removed. Redis is never dumped.
 **Download.** `backup_read` opens the file on the first call (`offset` 0) and keeps a cursor per `downloadId`; each later call must continue at the previous end (`invalid_input` otherwise). At most **16** downloads are open (`operation_busy`); a download is closed at `eof`, on an error, by `backup_close`, or after **15 minutes**.
 **Upload.** `upload_start`, any number of `upload_chunk`, then `upload_finish` with the sha256; `upload_abort` removes the partial file.
-**Deadlines.** Every operation has a 30 minute deadline in the agent. The engine waits much less for most: 3 s for `capabilities`, 30 s by default, 2 minutes for `delete` and `upload_*`, and **30 minutes** for `backup_create`, `restore`, `backup_offsite_put`, `backup_offsite_restore`, `volume_backup_create` and `volume_backup_offsite` (the engine's `volume_backup_offsite_restore` call also waits 30 minutes, but see the next note). The other operations (`register`, `backup_list`, `backup_read`, `backup_close`) use the 30 s default.
+**Deadlines.** Every operation has a 30 minute deadline in the agent. The engine waits much less for most: 3 s for `capabilities`, 30 s by default, 2 minutes for `delete` and `upload_*`, and **30 minutes** for `backup_create`, `restore`, `backup_offsite_put`, `backup_offsite_restore`, `volume_backup_create` and `volume_backup_offsite`. The other operations (`register`, `backup_list`, `backup_read`, `backup_close`) use the 30 s default.
 **Off-site URLs.** `url` and `headers` come from the engine and carry credentials. The agent does not log or store them and does **not** restrict their scheme or host; it relies on the engine, which is trusted ([section 10](#10-security-considerations)).
 
 **Socket relay.** `db_socket_open {t, id, args: dbSpec}` makes the agent connect to the container's loopback port. The port is derived from the inspected `5432/tcp` binding on `127.0.0.1`, never taken from the frame. The agent answers `db_socket_ready`, then relays raw bytes both ways as base64 in the field **`d`** (not `data`): `db_socket_in` carries at most **180000** characters per frame (a larger or undecodable frame closes the socket), and `db_socket_out` carries reads of at most **128 KiB**. The relay ends with `db_socket_end`, which has no `error` after a normal close or the deadline, `error: true` (the spec or identity was refused, the database is deleted, there is no loopback port, or the dial failed), or one of `operation_busy`, `database_not_running`, `query_too_large`.
-Limits: dial timeout **5 s**; a **30 s deadline from the dial** for the whole relay (not an idle timer); `query_too_large` after **4 MiB** received from the database. `db_socket_close` closes the connection; a `db_socket_in` or `db_socket_close` for an unknown id is ignored. The engine adds its own limits: a 30 s timer per socket (`query_timeout`), and it destroys the socket with `query_too_large` when one `db_socket_out` carries more than 350000 characters. A socket is **not** resumed after a reconnect; the agent notices the loss only when it next fails to send, or at the deadline ([open question 12](#11-open-questions-and-inconsistencies)). Only Postgres is relayed; a Redis database fails with `error: true`.
+Limits: dial timeout **5 s**; a **30 s deadline from the dial** for the whole relay (not an idle timer); `query_too_large` after **4 MiB** received from the database. `db_socket_close` closes the connection; a `db_socket_in` or `db_socket_close` for an unknown id is ignored. The engine adds its own limits: a 30 s timer per socket (`query_timeout`), and it destroys the socket with `query_too_large` when one `db_socket_out` carries more than 350000 characters. A socket is **not** resumed after a reconnect; the agent notices the loss only when it next fails to send, or at the deadline ([7.2](#72-what-survives-a-reconnect)). Only Postgres is relayed; a Redis database fails with `error: true`.
 
 <!-- example: frames.json dbRequest -->
 ```json
@@ -709,16 +709,16 @@ Fails with `conflict` if another update is pending.
 
 <!-- example: self_update @cmdpair -->
 ```json
-{"t":"cmd","id":"agentupd-lz3k9","type":"self_update","args":{"sha256":"1111111111111111111111111111111111111111111111111111111111111111","version":"0.4.0+202611201015"}}
-{"t":"result","id":"agentupd-lz3k9","ok":true,"data":{"restarting":true,"from":"0000000000000000000000000000000000000000000000000000000000000000","to":"1111111111111111111111111111111111111111111111111111111111111111","fromVersion":"0.3.1+202611181227","toVersion":"0.4.0+202611201015","rollback":false}}
+{"t":"cmd","id":"agentupd-lz3k9","type":"self_update","args":{"sha256":"1111111111111111111111111111111111111111111111111111111111111111","version":"0.4.0+202611190506"}}
+{"t":"result","id":"agentupd-lz3k9","ok":true,"data":{"restarting":true,"from":"0000000000000000000000000000000000000000000000000000000000000000","to":"1111111111111111111111111111111111111111111111111111111111111111","fromVersion":"0.3.1+202611181227","toVersion":"0.4.0+202611190506","rollback":false}}
 ```
 
-A deliberate rollback (the engine's `rollback` path, [8.3](#83-the-engine-pin-and-what-it-serves)):
+A deliberate rollback (the engine's `rollback` path, [8.3](#83-what-an-engine-pins-and-serves)):
 
 <!-- example: self_update @cmdpair -->
 ```json
 {"t":"cmd","id":"agentupd-lz3ka","type":"self_update","args":{"sha256":"1111111111111111111111111111111111111111111111111111111111111111","version":"0.3.1+202611181227","rollback":true,"reason":"0.4.0 breaks caddy_apply on arm64"}}
-{"t":"result","id":"agentupd-lz3ka","ok":true,"data":{"restarting":true,"from":"0000000000000000000000000000000000000000000000000000000000000000","to":"1111111111111111111111111111111111111111111111111111111111111111","fromVersion":"0.4.0+202611201015","toVersion":"0.3.1+202611181227","rollback":true}}
+{"t":"result","id":"agentupd-lz3ka","ok":true,"data":{"restarting":true,"from":"0000000000000000000000000000000000000000000000000000000000000000","to":"1111111111111111111111111111111111111111111111111111111111111111","fromVersion":"0.4.0+202611190506","toVersion":"0.3.1+202611181227","rollback":true}}
 ```
 
 #### 4.9.16 `rename`
@@ -763,7 +763,7 @@ A deliberate rollback (the engine's `rollback` path, [8.3](#83-the-engine-pin-an
 
 #### 4.9.20 `volumes_list`
 
-`{}` lists the platform's Docker volumes with mount point, size (`du`) and the owning app if a managed container mounts it. Result `{volumes: [{name, mountpoint?, sizeBytes?, appName?, appId?}]}`.
+`{}` lists the server's Docker volumes with mount point, size (`du`) and the owning app if a managed container mounts it. Result `{volumes: [{name, mountpoint?, sizeBytes?, appName?, appId?}]}`.
 
 <!-- example: volumes_list @cmdpair -->
 ```json
@@ -777,7 +777,7 @@ A deliberate rollback (the engine's `rollback` path, [8.3](#83-the-engine-pin-an
 The agent writes a request file; a root `f2c-harden.path` unit starts `f2c-harden.service` (`harden.sh`), which writes a result file that the agent returns. Before and after its steps, `harden.sh` checks the `harden/link-proof` file written by the agent's link monitor ([2.6](#26-keepalive-and-liveness)).
 
 - **Exactly once per `runId`.** The agent records each run in `<state-dir>/harden/runs.json` (up to 200). A repeated `runId` is never run again; the agent returns the recorded or fresh outcome with `data.replayed: true` ([6.3](#63-duplicate-ids-and-replay)).
-- **Failure shapes.** Failures before the run starts are `ok:false` with a `harden_*` code at every protocol ([section 5](#5-error-codes-and-retry-semantics)). Failures the agent detects while following the run (`harden_running:`, `harden_not_triggered:`, `harden_script_failed:` or an unknown outcome) depend on the session: at **protocol 0** they come back as `ok:true` with `data.status: "failed"`, a `data.message` with that prefix and **no `code`**; at **protocol >= 1** they are `ok:false` with the same message as `error`, **no `data`**, and a code (`conflict`, `harden_failed`, `harden_script_failed`; [5.1](#51-resultcode)). What the **script** reports (`failed`, `rolled_back`) is `ok:true` with the full audit at every protocol, and so is the replay of a recorded result (open question 5).
+- **Failure shapes.** Failures before the run starts are `ok:false` with a `harden_*` code at every protocol ([section 5](#5-error-codes-and-retry-semantics)). Failures the agent detects while following the run (`harden_running:`, `harden_not_triggered:`, `harden_script_failed:` or an unknown outcome) depend on the session: at **protocol 0** they come back as `ok:true` with `data.status: "failed"`, a `data.message` with that prefix and **no `code`**; at **protocol >= 1** they are `ok:false` with the same message as `error`, **no `data`**, and a code (`conflict`, `harden_failed`, `harden_script_failed`; [5.1](#51-resultcode)). What the **script** reports (`failed`, `rolled_back`) is `ok:true` with the full audit at every protocol, and so is the replay of a recorded result.
 - **Waiting.** The agent waits up to 21 minutes for the result, then returns `harden_timeout` and keeps following the run for up to 32 minutes in total so that its outcome is recorded.
 - Result `{version, id, mode, status (succeeded/failed/rolled_back), message, startedAt, finishedAt, backupId, sshKeysPresent, sshPorts, warnings, prechecks, postchecks, steps, audit}` plus `replayed?`. The step, check and audit objects are produced by `harden.sh`; this specification only fixes the envelope.
 
@@ -791,13 +791,13 @@ The agent writes a request file; a root `f2c-harden.path` unit starts `f2c-harde
 
 ### 5.1 `result.code`
 
-`code` is a lower-case string (`^[a-z][a-z0-9_]{0,39}$`) on an `ok:false` result. **Which codes the agent sends depends on the session protocol** ([3.2](#32-negotiation-implemented-in-agent-and-engine-unreleased); *implemented in agent and engine, unreleased*). The gate is `SessionProtocol() >= 1` only; the `resultCode` capability is not consulted.
+`code` is a lower-case string (`^[a-z][a-z0-9_]{0,39}$`) on an `ok:false` result. **Which codes the agent sends depends on the session protocol** ([3.2](#32-negotiation); since agent 0.4.0). The gate is `SessionProtocol() >= 1` only; the `resultCode` capability is not consulted.
 
 - **Protocol 0** (an engine that sent no valid `hello_ok.protocol`, or any agent up to 0.3.1): exactly the **eight legacy codes** `unknown_command`, `expired`, `harden_not_installed`, `harden_bad_request`, `harden_state_unreadable`, `harden_script_failed`, `harden_interrupted`, `harden_timeout`. Every other failure is free text with **no `code`**. This is byte-for-byte what 0.3.1 sends (golden tests).
 - **Protocol >= 1**: **every `ok:false` carries a `code`** from the 27-code list below (or one of the five kept prefix codes). The `error` text is **unchanged** from protocol 0. The agent never sends both `unknown_command` and `unknown_cmd`: protocol 0 gets the first, protocol >= 1 the second. The fallback is `internal`.
 - There is **no `retryable` field**. The Retry column is guidance for engine authors, not wire data. "Retry" means: may the engine send the command again with a **new** `id` ([5.3](#53-retry-semantics)).
 
-The enumeration is [`resultCode`](protocol/schemas/common.json#/$defs/resultCode) (the 27, the kept five, and the legacy `unknown_command`). The unreleased engine reads `code` first and matches the error text only for a result without one (protocol 0 agents; [open question 2](#11-open-questions-and-inconsistencies)); keep the text stable.
+The enumeration is [`resultCode`](protocol/schemas/common.json#/$defs/resultCode) (the 27, the kept five, and the legacy `unknown_command`). An engine should read `code` first and match the error text only for a result without one (protocol 0 agents); keep the text stable.
 
 | # | Code | Raised when | Retry |
 |---|---|---|---|
@@ -867,7 +867,7 @@ Engine-synthesised codes. An engine MAY record two further codes on a command th
 
 ### 5.4 Size and truncation limits (as implemented)
 
-*Item 8. These are the limits the code applies today; nothing here is new behaviour. A receiver MUST treat `error` as opaque text for people (decide on `code`, [5.1](#51-resultcode)), MUST accept any frame up to 16 MiB, and MUST NOT rely on the end of a long text being present.*
+*These are the limits the code applies today; nothing here is new behaviour. A receiver MUST treat `error` as opaque text for people (decide on `code`, [5.1](#51-resultcode)), MUST accept any frame up to 16 MiB, and MUST NOT rely on the end of a long text being present.*
 
 **Frames.** The WebSocket message limit is **16 MiB** in both directions (agent `SetReadLimit(16<<20)`, engine `MAX_MESSAGE`); a larger message closes the connection with `1009 "too big"`. The agent does not check its own outgoing frames against it, except for the replay stub below.
 
@@ -928,11 +928,11 @@ engine:  queued --send--> sent --ack--> acked --result--> done | failed
 agent:   dedupe check --> journal --> ack --> running --> result (cached, then sent)
 ```
 
-1. The engine stores `cmd:<id>` in Redis (`SET NX`, 24 h TTL) and appends the id to the server's queue. If the agent is connected it sends the `cmd` frame. If the id already exists the engine refuses the new command.
+1. The engine records the command under its id (ids are unique: an engine refuses a new command whose id already exists) and queues it for the server. If the agent is connected it sends the `cmd` frame.
 2. The agent decodes the frame, drops it if the `id` is empty, then applies the dedupe rules ([6.3](#63-duplicate-ids-and-replay)) and the `notAfter` check ([6.4](#64-notafter-and-skew)).
 3. A new command is registered as running (written to `running.json` before it starts), the agent sends `ack`, and the command runs in its own goroutine (there is no limit on parallel commands).
 4. On completion the agent stores the result frame in memory and in `<state-dir>/done.json` (and removes the `running.json` record), then sends it. If the connection is down the send is lost but the cached result remains.
-5. The engine, on `result`, stores `res:<id>` (1 h TTL), deletes `cmd:<id>` and the queue entry, and wakes the waiters. On `ack` it only marks the command `acked`.
+5. The engine, on `result`, records the outcome, removes the command from its queue and wakes the waiters. On `ack` it only marks the command `acked`.
 
 ### 6.2 Acknowledgement
 
@@ -941,7 +941,7 @@ An `ack` is also sent again for a duplicate of a still-running id.
 
 ### 6.3 Duplicate ids and replay
 
-> **Implemented in agent and engine, unreleased** (protocol item #10). Agents up to 0.3.1 only had the finished-id cache and the plain re-ack (last rows of the table).
+> **Since agent 0.4.0.** Agents up to 0.3.1 only had the finished-id cache and the plain re-ack (last rows of the table).
 
 The engine re-sends a command with the **same id, args and `notAfter`**; the first result wins and later ones are recorded by the engine as `late`. The agent keeps two files so that a re-sent id is never executed twice by accident:
 
@@ -978,7 +978,7 @@ The engine re-sends a command with the **same id, args and `notAfter`**; the fir
 | `rename` | UNSAFE | After success the source is gone (`not_found`); half-done is `conflict`. | `interrupted` |
 | `build`, `load` | UNSAFE | Minutes of CPU or a large import, a second image or a partial load. | `interrupted` |
 | `exec` | UNSAFE | Not read-only by type: it runs any argv in the container. A timeout is `ok:true`, `exitCode:-1`. | `interrupted` |
-| `harden` | own | Exactly-once by `runId` (`runs.json`); a repeat returns the recorded outcome with `data.replayed:true` (the engine reads the frame-level `replayed` but still not this harden marker, [open question 4](#11-open-questions-and-inconsistencies)). | runs again; its record decides |
+| `harden` | own | Exactly-once by `runId` (`runs.json`); a repeat returns the recorded outcome with `data.replayed:true` (an engine should not confuse this marker with the frame-level `replayed` of a re-sent id). | runs again; its record decides |
 | `restart_agent` | special | The result is cached before the exit delay. | `ok:true {restarting:true}` |
 
 - **Cancelled and failed commands are cached** like any other result. **`expired` results are not cached.**
@@ -988,14 +988,14 @@ The engine re-sends a command with the **same id, args and `notAfter`**; the fir
 
 `notAfter` is an absolute RFC 3339 timestamp (fractional seconds allowed). The agent compares it to its own clock **on arrival only**: the command is refused when `now` is later than `notAfter + 60 s` (the allowed clock skew, `NotAfterSkew`). A refused command
 gets `result {ok:false, code:"expired"}`, is not run, and is not cached, so nothing marks the id as executed. A missing `notAfter` means no deadline. A value that does not parse is logged and ignored, and the command runs.
-`notAfter` does not stop a command that has already started. The released engine never set `notAfter` and its re-sent frames carried only `id`, `type` and `args`. The unreleased engine sets an absolute `notAfter` on every command, stores it, re-sends it unchanged and settles an expired command itself with `expired` ([open question 1](#11-open-questions-and-inconsistencies)).
+`notAfter` does not stop a command that has already started. An engine should set an absolute `notAfter` on every command, store it, re-send it unchanged and settle an expired command itself with `expired`; an engine that does not leaves a command able to reach the agent long after it was created.
 
 ### 6.5 Engine resend, TTL and superseding
 
-- On every (re)connect, after `hello_ok`, the engine reads its server queue in order and re-sends each `cmd` whose `cmd:<id>` still exists. Entries whose record has expired are removed.
+- On every (re)connect, after `hello_ok`, the engine reads its server queue in order and re-sends each `cmd` whose record still exists. Entries whose record has expired are removed.
 - A command record lives for **24 hours** (`CMD_TTL_S = 86400`); results live **1 hour**. A command not answered within 24 hours disappears and is never re-sent.
-- Before resending, and when a new `caddy_apply` is queued, the engine settles every older **pending** `caddy_apply` for that server as failed with `superseded by a later caddy_apply` and does not send it. In the unreleased engine the code is `superseded`, and an older never-sent lifecycle command (`run`, `rm`, `stop`, `rename`, `network_rm`, `volume_rm`) for the same object is settled the same way when a newer one is queued ([6.7](#67-ordering-and-delivery-guarantees)); other types are not superseded.
-- The released engine did not set `notAfter`, so a command could reach the agent up to 24 hours after it was created. The unreleased engine sets it (5 to 15 minutes by command type, at least the caller's wait, 24 hours at most) and re-sends the stored value, so a late command is refused as `expired`.
+- Before resending, and when a new `caddy_apply` is queued, the engine settles every older **pending** `caddy_apply` for that server as failed with `superseded by a later caddy_apply` and does not send it. An engine may use the code `superseded`, and settle an older never-sent lifecycle command (`run`, `rm`, `stop`, `rename`, `network_rm`, `volume_rm`) for the same object the same way when a newer one is queued ([6.7](#67-ordering-and-delivery-guarantees)); other types are not superseded.
+- Without `notAfter`, a command could reach the agent up to 24 hours after it was created. An engine should set it (for example 5 to 15 minutes by command type, 24 hours at most) and re-send the stored value, so that a late command is refused as `expired`.
 
 ### 6.6 Timeouts and cancellation
 
@@ -1014,7 +1014,7 @@ The agent has no general command timeout; each command bounds itself:
 | `pull`, `run`, `stop` and the others | none beyond Docker's own |
 
 **Cancellation.** `cancel {id}` calls the cancel function of a **running** command and is otherwise ignored (no reply, no error for an unknown or finished id). A command that honours its context (everything that shells out through `docker`, plus `build`, `load`, `logs`, `exec` and `harden`) stops
-and ends with a normal `result` `ok:false` whose text depends on where it stopped (build errors say `cancelled`; `harden` uses `harden_interrupted`). That failure is cached like any other (open question 9). The engine also settles superseded `caddy_apply` commands itself without cancelling them.
+and ends with a normal `result` `ok:false` whose text depends on where it stopped (build errors say `cancelled`; `harden` uses `harden_interrupted`). That failure is cached like any other. The engine also settles superseded `caddy_apply` commands itself without cancelling them.
 
 ### 6.7 Ordering and delivery guarantees
 
@@ -1028,7 +1028,7 @@ and ends with a normal `result` `ok:false` whose text depends on where it stoppe
 
 ### 7.1 Backoff and retry schedules
 
-> **Implemented in the agent, unreleased** (items #13 and #14). Agents up to and including 0.3.1 use the older behaviour described at the end of this subsection.
+> **Since agent 0.4.0.** Agents up to and including 0.3.1 use the older behaviour described at the end of this subsection.
 
 The agent loops forever until it is stopped. Every wait is **jittered** and nothing about retries is visible on the wire. The loop is:
 
@@ -1040,7 +1040,7 @@ The agent loops forever until it is stopped. Every wait is **jittered** and noth
 | Class | Triggers | Base delay | Wait |
 |---|---|---|---|
 | Normal | Network or TLS error, dial timeout, `404`, `426`, `4001`, `1003`, `1009`, a dead link, any other close | 1 s, doubling to a cap of 30 s (1, 2, 4, 8, 16, 30, 30...) | Equal jitter: a random value in **[base/2, base]** |
-| Auth | HTTP `401` or `403` on the dial, close `4003`, close `4004` (`protocol_unsupported`, implemented in the agent, unreleased) | 60 s, doubling to a cap of 10 min (60, 120, 240, 480, 600, 600...) | Equal jitter in **[base/2, base]**, so 30 s at the least and 10 min at the most |
+| Auth | HTTP `401` or `403` on the dial, close `4003`, close `4004` (`protocol_unsupported`, since agent 0.4.0) | 60 s, doubling to a cap of 10 min (60, 120, 240, 480, 600, 600...) | Equal jitter in **[base/2, base]**, so 30 s at the least and 10 min at the most |
 | Replaced | Close `4000` | none | Uniform random **30 to 90 s**, no doubling |
 
 - The three schedules are independent. A normal failure does not advance the auth schedule and the other way round.
@@ -1051,7 +1051,7 @@ The agent loops forever until it is stopped. Every wait is **jittered** and noth
 
 Two agents sharing one token still close each other with `4000`, but now only about every 30 to 90 s each, at random times, instead of in a tight loop.
 
-*Before this version* (agents up to 0.3.1) the loop doubled a delay from 1 s to a 30 s cap with **no jitter**, reset it after a session over 60 s, and treated `401` and `4003` like any other failure.
+*Before agent 0.4.0* (agents up to 0.3.1) the loop doubled a delay from 1 s to a 30 s cap with **no jitter**, reset it after a session over 60 s, and treated `401` and `4003` like any other failure.
 
 ### 7.2 What survives a reconnect
 
@@ -1070,11 +1070,11 @@ The protocol has no session id, no sequence numbers and no resume handshake. Eac
 
 ## 8. Update and signature flow
 
-This section describes the release format 1 and the agent behaviour of **agent 0.4.0 and later** (items 18 to 20, agent side built). Where a rule is about the engine ("the engine verifies...", pin format 2, trust file) it describes the design of the reference engine, specified here so that other engines can follow it; the engine side is in progress. An agent older than 0.4.0 knows none of the new parts and ignores them: every new header line is a `#` comment to its parser, and the extra files are never looked up by it.
+This section describes release format 1 and the behaviour of **agent 0.4.0 and later**. Where a rule is about the engine ("the engine verifies...", the pin, the trust file) it is a specification for any engine that serves self-update, so that other engines can follow it. An agent older than 0.4.0 knows none of the new parts and ignores them: every new header line is a `#` comment to its parser, and the extra files are never looked up by it.
 
 ### 8.1 Release layout
 
-A release (built by `scripts/release.sh`, published as GitHub release assets) consists of **15 files**; the engine pins exactly these names ([`release.json`](protocol/schemas/release.json)). Releases up to 0.3.1 have the first 13 (format 0, "legacy"); `SHA256SUMS.sigs` and `release-keys.json` are new.
+A release (built by `scripts/release.sh`, published as GitHub release assets) consists of **15 files**; an engine that pins a release pins exactly these names ([`release.json`](protocol/schemas/release.json)). Releases up to 0.3.1 have the first 13 (format 0, "legacy"); `SHA256SUMS.sigs` and `release-keys.json` are new.
 
 | File | Content |
 |---|---|
@@ -1097,7 +1097,7 @@ A release (built by `scripts/release.sh`, published as GitHub release assets) co
 | `# keys-serial <n>` | Serial of the `release-keys.json` shipped in this release. |
 | `# floor <semver>` | Optional. No agent may be moved below it, even by rollback; set only deliberately, because it can never be lowered by a rollback. |
 
-**Caddy is hash-only.** The Caddy binaries are not release assets. `SHA256SUMS` lists `caddy-linux-amd64` and `caddy-linux-arm64` with their hashes (from `release.sh --caddy-dir`), so the engine's served Caddy and the one `install.sh` downloads are checked against a signed value. `release.sh` fails if a line of `SHA256SUMS` is neither a `#` comment nor `<hash>  <name>`.
+**Caddy is hash-only.** The Caddy binaries are not assets of the agent release (the `caddy-binaries.yml` workflow publishes them as a separate release). `SHA256SUMS` lists `caddy-linux-amd64` and `caddy-linux-arm64` with their hashes (from `release.sh --caddy-dir`), so the engine's served Caddy and the one `install.sh` downloads are checked against a signed value. `release.sh` fails if a line of `SHA256SUMS` is neither a `#` comment nor `<hash>  <name>`.
 
 Schemas: [`versionJson`](protocol/schemas/release.json#/$defs/versionJson), [`agentReleasePin`](protocol/schemas/release.json#/$defs/agentReleasePin).
 
@@ -1105,8 +1105,8 @@ Schemas: [`versionJson`](protocol/schemas/release.json#/$defs/versionJson), [`ag
 ```json
 {
   "name": "f2c-agent",
-  "version": "0.4.0+202611201015",
-  "builtAt": "2026-11-20T10:15:43Z",
+  "version": "0.4.0+202611190506",
+  "builtAt": "2026-11-19T05:06:14Z",
   "artifacts": [
     {"name": "f2c-agent-linux-amd64", "goos": "linux", "goarch": "amd64", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 8868000},
     {"name": "f2c-agent-linux-arm64", "goos": "linux", "goarch": "arm64", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "size": 8192160}
@@ -1125,7 +1125,7 @@ Schemas: [`versionJson`](protocol/schemas/release.json#/$defs/versionJson), [`ag
   "sumsFile": "SHA256SUMS",
   "signatureFile": "SHA256SUMS.sig",
   "signaturesFile": "SHA256SUMS.sigs",
-  "keysSerial": 1,
+  "keysSerial": 2,
   "caddy": {"tag": "caddy-v2.11.7-do1-cf1-ad1", "sha256": {"amd64": "4444444444444444444444444444444444444444444444444444444444444444", "arm64": "5555555555555555555555555555555555555555555555555555555555555555"}}
 }
 ```
@@ -1134,10 +1134,10 @@ A matching `SHA256SUMS` starts like this (placeholder hashes):
 
 ```text
 # f2c-release 1
-# version 0.4.0+202611201015
-# released 2026-11-20T10:15:43Z
+# version 0.4.0+202611190506
+# released 2026-11-19T05:06:14Z
 # caddy-tag caddy-v2.11.7-do1-cf1-ad1
-# keys-serial 1
+# keys-serial 2
 2222222222222222222222222222222222222222222222222222222222222222  install.sh
 ...
 4444444444444444444444444444444444444444444444444444444444444444  caddy-linux-amd64
@@ -1146,18 +1146,18 @@ A matching `SHA256SUMS` starts like this (placeholder hashes):
 ### 8.2 Signing and the trusted key list
 
 - Algorithm: **Ed25519** (raw 32-byte public keys, raw 64-byte signatures). The signature covers the exact bytes of `SHA256SUMS` (no hash-of-hash, no context string).
-- **One source of keys: `keys/release-keys.json`** ([`releaseKeys`](protocol/schemas/release.json#/$defs/releaseKeys)), public keys only. The agent embeds it (`keys/` Go package; `internal/update` derives its list from it), `install.sh` carries a block **generated** from it (`go run ./cmd/ed25519tool sync-install`), and an engine keeps its own trust file with the same data ([8.5](#83-the-engine-pin-and-what-it-serves)). `release.sh` and a Go test (`keys` package) fail if the `install.sh` block differs from the file.
+- **One source of keys: `keys/release-keys.json`** ([`releaseKeys`](protocol/schemas/release.json#/$defs/releaseKeys)), public keys only. The agent embeds it (`keys/` Go package; `internal/update` derives its list from it), `install.sh` carries a block **generated** from it (`go run ./cmd/ed25519tool sync-install`), and an engine keeps its own trust file with the same data ([8.3](#83-what-an-engine-pins-and-serves)). `release.sh` and a Go test (`keys` package) fail if the `install.sh` block differs from the file.
 - **Key id** = the first 8 bytes of the SHA-256 of the raw 32-byte public key, as 16 lowercase hex characters. It is only a selector for `SHA256SUMS.sigs`: the signature is always verified against the key the id names, so a wrong id never lets a bad signature through. Each key has a `status`:
   `active` (verifies, and `release.sh` may sign with it), `retired` (verifies only, so older releases stay installable) or `revoked` (never verifies; it stays listed so a signature by it is refused by name).
 - **Accepting a signature.** If the release has `SHA256SUMS.sigs`, the agent verifies each entry under the key its `keyId` names; unknown ids are skipped, a revoked id is refused with a message, and **one valid signature by a trusted key is enough**. If `.sigs` is absent or yields nothing, the agent falls back to the raw `SHA256SUMS.sig` and tries **every trusted key** (so releases signed before key ids still verify). The list is deliberately not read from disk or from the engine, and a signature by a key that is revoked in the agent's list is refused even if the signature is valid.
 - **Rotation.** Release N is signed by the old key and ships a list that trusts both. Release N+1 is signed by the new key, once the fleet is at N. A later release revokes the old key. An engine should block the cutover release while a server is below the previous release. Revoking a key is described in the next two bullets. No 2-of-N for now: `SHA256SUMS.sigs` is a list, so a `threshold` can be added later without a format break.
-- **Revoking a key (normal path).** Ship a release with a **higher `serial`** in which the key is `revoked`, signed by a key that is still trusted and not compromised, and apply it on the engine (the reference engine has a command that takes the `release-keys.json` of a release). The engine takes the new list only because that release verifies under its *current* trust file; it drops the revoked key the moment the list is applied (no fleet wait) and refuses any pin signed only by it. **The engine trust file is never edited by hand**, not even in an emergency: a hand edit would bypass the one rule that makes the file trustworthy.
+- **Revoking a key (normal path).** Ship a release with a **higher `serial`** in which the key is `revoked`, signed by a key that is still trusted and not compromised, and apply it on the engine (an engine should offer a command that takes the `release-keys.json` of a release). The engine takes the new list only because that release verifies under its *current* trust file; it drops the revoked key the moment the list is applied (no fleet wait) and refuses any pin signed only by it. **The engine trust file is never edited by hand**, not even in an emergency: a hand edit would bypass the one rule that makes the file trustworthy.
 - **Revoking a key.** If **no uncompromised active key exists**, the normal path (a release signed by an uncompromised key, with a higher `serial`) cannot work: a compromised key cannot sign a trustworthy revocation of itself. Engines should provide an **audited, revoke-only emergency procedure**: it only marks a key `revoked` (the entry stays in the list, so a later release cannot bring the key back), never adds, trusts or un-revokes a key, refuses to leave the engine with no active key unless that is explicit, records every run, and takes effect when the engine next loads its trust file. Adding a new key is never part of it.
 - **Recovery when no trusted key is left.** Recovery of trust is **manual and out-of-band**: the new key reaches an engine only through a reviewed change of its trust file, not through a release or a running engine. A fresh release signed by the new key follows, and the engine then serves it under the new trust file.
 - **Backup key.** The release signing key is held offline by the maintainers, and a backup signing key, also listed as `active`, is held separately, so that a single revoke never leaves zero active keys and the normal path above stays available.
 - **Fleet recovery after a revoke.** Agents and `install.sh` trust a key only if an **agent build embeds it** (`keys/release-keys.json`, the generated `install.sh` block). An agent whose build lacks the new key cannot verify a release signed only by it, and an agent that still trusts the compromised key only fetches through the engine, which has stopped serving anything signed by it. Servers that trust no key therefore get the new key by **reinstalling with `install.sh`** from a release built with the new key list (`install.sh` downloads from the GitHub release and verifies it against its embedded keys); it **never happens through `self_update`**, which cannot verify a release it has no key for.
 - **Who may change the list.** An engine's trust file should change **only through a signed release**: the `release-keys.json` of a release is applied only if the release's signature verifies under the *current* trust file and its `serial` is higher. Nothing else writes it.
-- **Where the private key lives.** `scripts/release.sh` signs with a key **outside the repository** (`F2C_RELEASE_SIGNING_KEY`, default `~/.f2c-release/ed25519.pem`) through `cmd/ed25519tool sign-release`. The release signing key is held offline by the maintainers, and a backup key is held separately. `sign-release` refuses a key that is not listed as `active`. The private key is never in the repository, and no release tool in the repository generates one. If no key is found, `release.sh` fails; only `--no-sign` builds a release without signatures, and such a release will not install or update.
+- **Where the private key lives.** `scripts/release.sh` signs with a key **outside the repository** (its path is given by `F2C_RELEASE_SIGNING_KEY`) through `cmd/ed25519tool sign-release`. The release signing key is held offline by the maintainers, and a backup key is held separately. `sign-release` refuses a key that is not listed as `active`. The private key is never in the repository, and no release tool in the repository generates one. If no key is found, `release.sh` fails; only `--no-sign` builds a release without signatures, and such a release will not install or update.
 - **Key fingerprints.** The key ids and fingerprints are published in the README and in the release notes of the first signed release. `install.sh --print-keys` prints the key serial and each key's id and status for comparison; it is not advertised.
 
 <!-- example: release.json releaseKeys -->
@@ -1181,18 +1181,18 @@ A matching `SHA256SUMS` starts like this (placeholder hashes):
 }
 ```
 
-### 8.3 The engine pin and what it serves
+### 8.3 What an engine pins and serves
 
-This section is the design for the engine side (in progress, unreleased); the agent does not read the pin. Engine and a format 2 pin are released and rolled back together.
+This section specifies what an engine that serves self-update should do; the agent does not read the pin. The engine and a format 2 pin should be released and rolled back together.
 
-- An engine's pin file (`agent-release.json`) pins one release: `repo`, `tag`, `version` and, for each file, `sha256` and `size`. **Format 1** (no `format` field, today): exactly 13 files. **Format 2** adds `"format": 2`, the files `SHA256SUMS.sigs` and `release-keys.json` (15 in all), `caddy` (`{amd64, arm64}`, each `{sha256, size}`, hash-only), `keys` (`{serial, sha256}` of the release's `release-keys.json`), and optionally `supersedes` (the previous pin version, the authoritative chain) and `rollback` (`{reason, at}`).
-- The engine does not download anything at run time. A maintainer script fetches a release, verifies it with the same function the engine runs at start-up, and writes the pin. At start-up, and re-checked every 30 s while failing, the engine verifies its assets. For format 2 the checks are:
+- An engine pins one release. The pin is an engine-defined record; the example below shows a suitable shape: `repo`, `tag`, `version` and, for each file, `sha256` and `size`. **Format 1** (no `format` field): exactly 13 files. **Format 2** adds `"format": 2`, the files `SHA256SUMS.sigs` and `release-keys.json` (15 in all), `caddy` (`{amd64, arm64}`, each `{sha256, size}`, hash-only), `keys` (`{serial, sha256}` of the release's `release-keys.json`), and optionally `supersedes` (the previous pin version, the authoritative chain) and `rollback` (`{reason, at}`).
+- An engine should not download anything at run time: an operator tool fetches a release, verifies it with the same function the engine runs at start-up, and writes the pin. At start-up, and again periodically while it is failing, the engine verifies its assets. For format 2 the checks are:
   1. the pin shape; 2. each file exists with the pinned size and SHA-256; 3. the signature (`.sigs` by key id, else the legacy `.sig`; the key must be active or retired in the trust file, a revoked key fails);
   4. the signed `SHA256SUMS` lists the pinned hash for every file including `version.json` and `release-keys.json`; 5. the signed header: `# version` equals `pin.version` and `version.json`'s version, the format major is known, `# keys-serial` is not above the trust file's unless the release's own keys file verifies;
-  6. `version.json` is consistent with the pin and the signed sums; 7. **monotonic**: `pin.version` is not below the high-water mark (a file `high-water.json` next to `state.json`, written after a successful verify; the shared compare of [8.4](#84-self-update-and-rollback), the build stamp breaking ties) unless the pin has `rollback` with a reason and `supersedes` equals the high-water mark; 8. the served Caddy binaries' sha256 equals `pin.caddy[arch]` and the signed `caddy-linux-<arch>` line (failure takes down only the Caddy routes); 9. `pin.version` is not below a signed `# floor`, with or without `rollback`.
+  6. `version.json` is consistent with the pin and the signed sums; 7. **monotonic**: `pin.version` is not below the high-water mark (the highest version the engine has verified, persisted after each successful verify; the shared compare of [8.4](#84-self-update-and-rollback), the build stamp breaking ties) unless the pin has `rollback` with a reason and `supersedes` equals the high-water mark; 8. the served Caddy binaries' sha256 equals `pin.caddy[arch]` and the signed `caddy-linux-<arch>` line (failure takes down only the Caddy routes); 9. `pin.version` is not below a signed `# floor`, with or without `rollback`.
   Any failure of 1 to 7 or 9 means the engine **refuses to serve** (HTTP 503 on every `/agent/*` route). **Format 1 pins** run only the old checks (1 to 3 and the old name check), plus a one-time log that the release is legacy.
 - Public, unauthenticated GET routes an engine serves for self-update: `/agent/bin/<amd64|arm64>` (the binary), `/agent/bin/<arch>.sha256`, `/agent/bin/SHA256SUMS`, `/agent/bin/SHA256SUMS.sig`, `/agent/bin/SHA256SUMS.sigs`, `/agent/bin/version.json` and `/agent/bin/release-keys.json`. Older engines also serve `/agent/install.sh`, `/agent/files/<deploy file>` and `/agent/bin/caddy-<arch>[.sha256]`; the standalone `install.sh` ([8.5](#85-installsh)) does not use them.
-  The engine advertises the latest agent hash for an architecture from the pin; the dashboard compares it with `hb.agentHash`. `hello_ok.minAgent` comes from `pin.version`. The engine sends `version`, `rollback` and `reason` in `self_update` only to agents that report `hb.updateV` at protocol >= 1.
+  The engine advertises the latest agent hash for an architecture from the pin; the engine compares it with `hb.agentHash` to tell whether an update is available. `hello_ok.minAgent` may come from `pin.version`. The engine sends `version`, `rollback` and `reason` in `self_update` only to agents that report `hb.updateV` at protocol >= 1.
 
 <!-- example: release.json agentReleasePin -->
 ```json
@@ -1225,7 +1225,7 @@ A format 2 pin (same file names plus the new ones):
 {
   "repo": "example-org/f2c-agent",
   "tag": "v0.4.0",
-  "version": "0.4.0+202611201015",
+  "version": "0.4.0+202611190506",
   "format": 2,
   "files": {
     "SHA256SUMS": {"sha256": "3333333333333333333333333333333333333333333333333333333333333333", "size": 100},
@@ -1245,7 +1245,7 @@ A format 2 pin (same file names plus the new ones):
     "caddy-resume.conf": {"sha256": "3333333333333333333333333333333333333333333333333333333333333333", "size": 100}
   },
   "caddy": {"amd64": {"sha256": "4444444444444444444444444444444444444444444444444444444444444444", "size": 100}, "arm64": {"sha256": "5555555555555555555555555555555555555555555555555555555555555555", "size": 100}},
-  "keys": {"serial": 1, "sha256": "6666666666666666666666666666666666666666666666666666666666666666"},
+  "keys": {"serial": 2, "sha256": "6666666666666666666666666666666666666666666666666666666666666666"},
   "supersedes": "0.3.1+202611181227"
 }
 ```
@@ -1254,7 +1254,7 @@ A format 2 pin (same file names plus the new ones):
 
 Trigger: the engine sends `self_update {sha256, version?, rollback?, reason?}` where `sha256` is the pinned hash for the agent's architecture. `version`, `rollback` and `reason` are **read only at protocol >= 1** (the engine sends them only to agents that report `hb.updateV`); at protocol 0 they are ignored, and the guard below still refuses a downgrade, so an engine that predates them can never roll an agent back. The agent:
 
-**Engine refusal without an agent version.** The engine answers `409` to a `self_update` request for a server that has not reported an `agentVersion` (it treats an unknown version as a possible downgrade, so only a pin with `rollback` gets through). The agent always sends `hb.agentVersion` (`version.Version`, `internal/agent/agent.go`), so this only affects a server that has not sent its first heartbeat; a development build sends `0.1.0-dev`, which compares below `0.1.0`.
+**Engine refusal without an agent version.** An engine may answer `409` to a `self_update` request for a server that has not reported an `agentVersion` (it treats an unknown version as a possible downgrade, so only a pin with `rollback` gets through). The agent always sends `hb.agentVersion` (the agent's build version), so this only affects a server that has not sent its first heartbeat; a development build sends `0.1.0-dev`, which compares below `0.1.0`.
 
 1. Returns `{upToDate:true}` if its own executable hash already equals `sha256`. Fails with `bad_request` if `rollback` is set without a `reason` of 1 to 200 characters, and with `conflict` if an update marker already exists.
 2. Downloads `<engine>/agent/bin/SHA256SUMS` (at most 1 MiB) and verifies its signature as in [8.2](#82-signing-and-the-trusted-key-list): `SHA256SUMS.sigs` by key id when the engine serves it, else the raw `SHA256SUMS.sig` (at most 4096 bytes, exactly 64) under every trusted key. Failure aborts with `integrity_failed` (`release signature: ...`). The header is parsed from the verified bytes.
@@ -1265,7 +1265,7 @@ Trigger: the engine sends `self_update {sha256, version?, rollback?, reason?}` w
 7. Runs the new binary with `version` as a smoke test (10 s timeout). When the release has a signed version, the output MUST equal it (`integrity_failed` otherwise), so a binary cannot report a different version than the one that was signed.
 8. Copies the current binary to `<exe>.prev`, atomically renames the new one over `<exe>`, writes the update marker `update-pending.json` (`{id, oldHash, newHash, exe, boots, at}` plus `fromVersion`, `toVersion`, `floor`, `rollback`, `reason` when known) into the state dir, replies `{restarting:true, from, to}` (at protocol >= 1 also `fromVersion`, `toVersion`, `rollback`), and exits (status 0) 3 s later. systemd restarts it (`Restart=always`).
 
-**The guard.** Let `cur` be the running version and `tgt` the signed `# version` of the target. Versions compare by semver precedence (build metadata ignored); at equal precedence the 12-digit build stamps compare numerically (`CompareBuild`). The decision order is shared with the engine's TypeScript port by the test vectors [`testdata/version-compare.json`](protocol/testdata/version-compare.json) (28 cases; both implementations must pass them):
+**The guard.** Let `cur` be the running version and `tgt` the signed `# version` of the target. Versions compare by semver precedence (build metadata ignored); at equal precedence the 12-digit build stamps compare numerically (`CompareBuild`). The decision order is shared with any engine implementation by the test vectors [`testdata/version-compare.json`](protocol/testdata/version-compare.json) (28 cases; an engine's implementation must pass them):
 
 | # | Condition | Decision | Result |
 |---|---|---|---|
@@ -1317,7 +1317,7 @@ Only then does it install the binary and the units. The service is enabled and s
 ### 9.2 Additive-only rule (policy)
 
 Protocol 1 MUST only change additively: new optional fields, new frame types, new command types with a capability flag, new `code` values, and new optional fields in results. A removal, rename, retyping or change in meaning of an existing field, frame type, command, code or enumeration value is a protocol 2 change.
-A sender that adds a new `code` MUST keep the existing error text stable for as long as an engine that matches on text is supported (open question 2).
+A sender that adds a new `code` MUST keep the existing error text stable for as long as an engine that matches on text is supported.
 
 ### 9.3 Deprecation policy (Proposal, not in force)
 
@@ -1325,7 +1325,7 @@ This is a suggestion:
 
 - A deprecated item is announced in the changelog with a minimum notice of two agent releases.
 - The sender keeps accepting and producing the deprecated form until the oldest agent the engine still supports has stopped using it.
-- A deprecated item is removed only in a new major protocol version, which needs the negotiation described in [3.2](#32-negotiation-implemented-in-agent-and-engine-unreleased) (implemented in the agent, unreleased).
+- A deprecated item is removed only in a new major protocol version, which needs the negotiation described in [3.2](#32-negotiation) (since agent 0.4.0).
 
 ## 10. Security considerations
 
@@ -1333,76 +1333,32 @@ This is a suggestion:
   and `self_update` replaces the agent binary. Anyone who can send commands as the engine owns the server. The agent narrows only what it can: managed-label scoping for container operations, `f2c-*` names for networks and volumes, a default-deny `run`, no privileged containers, bind mounts or host namespaces, and `cap-drop ALL` for stack containers.
 - **Authentication.** One long-lived bearer token (`f2cs_`) over TLS. It is read from `agent.json` (0600, owned by the agent user), sent only in the `Authorization` header, and never logged. Tokens can be rotated live ([4.5](#45-secret-bearing-live-frames)); the engine can revoke with close `4003`. Join tokens are one-time. There is no mutual TLS, no certificate pinning and no request signing.
 - **Transport.** TLS is required beyond loopback (an `https` engine, or `wss`). There is no application-layer encryption or signing of frames, so integrity depends entirely on TLS; a TLS-terminating proxy in front of the engine sees all traffic including secrets.
-- **Secrets in frames.** `rotate_token`, `registry_login` and `dns_token` are live-only, never queued, never stored in `done.json`, and never logged. `cert_install` (private key) and `build`/`load` (one-time download tokens) are ordinary commands, so the engine stores their arguments in Redis until they finish (up to 24 hours) and may re-send them. The agent's `done.json` holds results only, and the build log masks the token and secret-looking env values.
-- **Replay and staleness.** The only replay defence is id de-duplication (500 results). `notAfter` could limit how stale a command may be when it arrives, and the unreleased engine now sets it on every command (open question 1).
+- **Secrets in frames.** `rotate_token`, `registry_login` and `dns_token` are live-only, never queued, never stored in `done.json`, and never logged. `cert_install` (private key) and `build`/`load` (one-time download tokens) are ordinary commands, so the engine stores their arguments until they finish (up to 24 hours) and may re-send them. The agent's `done.json` holds results only, and the build log masks the token and secret-looking env values.
+- **Replay and staleness.** The only replay defence is id de-duplication (500 results). `notAfter` limits how stale a command may be when it arrives, if the engine sets it ([6.4](#64-notafter-and-skew)).
 - **Local services.** The TLS ask endpoint (`127.0.0.1:9180`), the access-log listener (`127.0.0.1:9181`) and the Caddy admin API are loopback only; the agent refuses a non-loopback listen address for the ask endpoint. Containers are published on `127.0.0.1` only.
-- **Release integrity.** Ed25519 over `SHA256SUMS`, which now also lists `version.json`, `release-keys.json` and the Caddy hashes and carries a signed header (version, build time, Caddy tag, key serial, optional floor); one key list (`keys/release-keys.json`) with key ids, retirement and revocation; signature verification in `self_update`, `install.sh` and the engine; a downgrade and floor guard in the agent; and a hash pin in the engine ([section 8](#8-update-and-signature-flow)). Remaining gaps: the release signing key is a file on one machine (an offline or hardware key is deferred), the engine's side of items 18 to 20 is in progress, and an agent below 0.4.0 does not check headers or the floor. A compromised engine can still ask for `rollback`; only the signed floor, which the engine cannot lower, limits it.
+- **Release integrity.** Ed25519 over `SHA256SUMS`, which now also lists `version.json`, `release-keys.json` and the Caddy hashes and carries a signed header (version, build time, Caddy tag, key serial, optional floor); one key list (`keys/release-keys.json`) with key ids, retirement and revocation; signature verification in `self_update`, `install.sh` and the engine; a downgrade and floor guard in the agent; and a hash pin in the engine ([section 8](#8-update-and-signature-flow)). Remaining gaps: the release signing key is a file held by the maintainers (a hardware key is not used), and an agent below 0.4.0 does not check headers or the floor. A compromised engine can still ask for `rollback`; only the signed floor, which the engine cannot lower, limits it.
 - **Denial of service.** Frame size is capped at 16 MiB; parallel commands are not capped; the engine closes idle connections after 60 s. A flood of `cmd` frames can start unlimited goroutines; the engine is trusted not to do that.
 - **Privacy.** Console keystrokes and output, database socket data and secrets are never logged by the agent.
 
-## 11. Open questions and inconsistencies
+## 11. Known limitations and design notes
 
-Each item records what the code does and where the two sides disagree or leave behaviour undefined, with a **status**: *Resolved* (implemented, or documented where the plan called only for documentation), *Decided*, *Dropped* (kept as is and documented), *Open*, or *Agent done, engine in progress*. "Unreleased" means implemented in the agent or engine working tree and not yet published. The tags say whether resolving an item is a **wire change** (a change to frames, headers or close codes).
+What the code does today where a receiver could be surprised, or where behaviour is left undefined. Each note says whether changing it would be a **wire change** (a change to frames, headers or close codes).
 
-**Open now:** items 6, 7, 21, 22 and 23 (all NICE, not scheduled), item 25 (`volume_backup_offsite_restore`, a future operation), the rest of the engine side of items 18 to 20 (the emergency revoke procedure itself is implemented in the reference engine).
+1. **Unknown-argument policy differs.** `run` rejects unknown keys (default-deny), every other command ignores them. An engine that adds a `run` option for a newer agent gets a hard error from an older one unless it checks a capability flag. *Wire change: no (policy).*
+2. **Malformed frames get no reply.** A `cmd` with an empty `id`, or any frame whose known field has the wrong JSON type (for example `args` as an array, `cols` as a string), is dropped silently, so the engine only sees a timeout. A negative acknowledgement would need a new code or frame. *Wire change: yes (additive).*
+3. **Result `error` truncation and size.** Documented in [5.4](#54-size-and-truncation-limits-as-implemented). The agent sends the full text, an engine may keep less, `data` is limited only by the 16 MiB frame, and a result over 256 KiB is replayed as a stub. Known nit: the stub cuts `error` at 4000 bytes, which can split a UTF-8 character. *Wire change: no.*
+4. **Cancellation has no acknowledgement.** A cancelled command ends with a failure that is cached and replayed for the same id. At protocol >= 1 it carries `code: "cancelled"` (and a deadline carries `timeout`); `harden` keeps `harden_interrupted` at every protocol. There is no acknowledgement of the cancel itself. *Wire change: an ack would be new.*
+5. **The dedupe cache is bounded.** `done.json` holds at most 500 results and drops entries older than 25 h ([6.3](#63-duplicate-ids-and-replay)). An id evicted from the cache and re-sent runs again, so an engine should issue unique ids. *Wire change: no.*
+6. **No session semantics for streams, console and database sockets.** These frames are lost while disconnected and never re-sent, `hello_ok` does not say whether the session is new, and an open console or socket on the agent is orphaned when the WebSocket drops. They are live-only by design and end at their own deadline ([4.7](#47-console-session), [4.8](#48-managed-database-channel), [7.2](#72-what-survives-a-reconnect)). *Wire change: yes.*
+7. **Reply naming is inconsistent.** `registry_login` is used for both the request and the reply, while the others are `token_rotated` and `dns_token_ok`. The names are kept for compatibility and documented in [4.5](#45-secret-bearing-live-frames). *Wire change: yes.*
+8. **The self-update window starts at process start.** The 60 s connect window and the 3-boot limit are measured from agent start, so a slow engine start can cause a rollback of a good binary. *Wire change: no.*
+9. **Command id format is only enforced by the engine** (an engine may require `^[A-Za-z0-9_.:-]{1,80}$`); the agent accepts any non-empty string. *Wire change: no.*
+10. **`hb.containers` is `null` when `docker ps` fails** instead of an empty list, and `stats` omits zero `restarts` and `exitCode`, so "absent" and "0" cannot be told apart. *Wire change: no (agent behaviour).*
+11. **`volume_backup_offsite_restore` is not implemented by the agent.** An engine may send it ([4.8](#48-managed-database-channel)); the agent answers `db_result {ok:false, code:"invalid_input", status:400}` at every protocol. A restore into an existing volume is destructive and needs its own rules before the operation is specified. *Wire change: yes (a new operation, additive).*
+12. **Harden replay marker.** A repeated `runId` gets the recorded outcome with `data.replayed:true`; this is not the frame-level `replayed` of a re-sent command id ([6.3](#63-duplicate-ids-and-replay)), and an engine that only reads the frame-level marker handles such an answer like a fresh one. *Wire change: no.*
+13. **`install.sh` has no downgrade check.** The update guard of [8.4](#84-self-update-and-rollback) covers `self_update` only; re-running `install.sh` over a newer install does not compare versions (there is no `--allow-downgrade`).
 
-| # | Topic | Status | Outcome |
-|---|---|---|---|
-| 1 | `notAfter` on commands | Resolved | engine sets, stores and re-sends it (unreleased) |
-| 2 | result `code` | Resolved | engine reads `code`, text only as a protocol 0 fallback (unreleased) |
-| 3 | `hardenV`, `hb.harden` | Resolved | engine gates `harden` and parses the summary (unreleased) |
-| 4 | replay marker | Resolved | frame-level `replayed` read; harden's `data.replayed` unread by the engine (NICE, engine only; the agent needs nothing) |
-| 5 | failure signalling | Resolved | codes on every failure at protocol >= 1; `tls_warm`/`http_probe` stay `ok:true` by design |
-| 6 | unknown `run` arguments | Open | NICE, not scheduled |
-| 7 | malformed frames get no reply | Open | NICE, not scheduled |
-| 8 | error truncation and size | Resolved (documented) | [5.4](#54-size-and-truncation-limits-as-implemented) |
-| 9 | cancellation | Resolved | `cancelled` is a final code; no cancel ack planned |
-| 10 | resend safety | Resolved | journal, `interrupted`, `replayed` in agent and engine (unreleased) |
-| 11 | dedupe cache | Decided | 500 entries plus a 25 h age limit; nothing more |
-| 12 | sessions for streams, console, sockets | Dropped (documented) | live-only by design |
-| 13 | backoff jitter | Resolved | agent, unreleased |
-| 14 | dead-link ping | Resolved | agent, unreleased |
-| 15 | version negotiation | Resolved | agent and engine, unreleased |
-| 16 | reply naming | Dropped (documented) | names kept |
-| 17 | database channel | Resolved (documented) | [4.8](#48-managed-database-channel), `database.json` |
-| 18 | release integrity | Agent done, engine in progress | signed `SHA256SUMS` header and sums (agent 0.4.0) |
-| 19 | downgrade guard | Agent done, engine in progress | `self_update` guard and floor (agent 0.4.0) |
-| 20 | one key list | Agent done, engine in progress | `keys/release-keys.json`; the release signing key is held offline by the maintainers and a backup key separately; revoke procedure documented ([8.2](#82-signing-and-the-trusted-key-list)); the engine's emergency revoke is implemented (unreleased) |
-| 21 | update window from process start | Open | NICE, not scheduled |
-| 22 | command id format | Open | NICE, not scheduled |
-| 23 | `hb.containers` null, zero omitted | Open | NICE, not scheduled |
-| 24 | multi-domain access mapping | Resolved | engine maps the app's service domains itself (unreleased); the agent's route-id mapping stays and does not double count |
-| 25 | `volume_backup_offsite_restore` | Open (future) | not implemented by the agent (`invalid_input` today); the engine disables the path until the operation is specified and agreed |
-
-Details:
-
-1. **[Resolved]** **The engine sent no `notAfter`, and its resends stripped it.** *Implemented in agent and engine, unreleased (#1).* The engine sets an absolute `notAfter` on every command (by command type, at least the caller's wait, at most 24 h), stores it, re-sends it unchanged and settles an expired command itself; the agent still refuses a late arrival with `expired` ([6.4](#64-notafter-and-skew)). *Wire change: no (the field existed).*
-2. **[Resolved]** **The engine dropped `code` and matched text.** *Implemented in agent and engine, unreleased (#2).* Every `ok:false` of a protocol >= 1 agent carries a code ([5.1](#51-resultcode)); the engine stores `code` on the result, reads it first and falls back to the error text only for a result without one (protocol 0 agents). The agent keeps its text stable for those. *Wire change: no.*
-3. **[Resolved]** **`hardenV` and `hb.harden` were not read by the engine.** *Implemented in agent and engine, unreleased (#3).* The engine gates `harden` on `hb.hardenV`, parses the `hb.harden` summary of recent runs and advertises `caps` `notAfter`, `hardenSummary` and (item 2) `resultCode`, all at protocol >= 1. *Wire change: no.*
-4. **[Resolved]** **The engine ignored the replay marker.** *Resolved at frame level, unreleased (#4, #10b).* The engine records the `replayed: true` of a result frame and handles `data.replayStub`. It still does not read harden's own `data.replayed` marker (set when a repeated `runId` gets the recorded outcome, which is not the same case as a re-sent command id), so such an answer is handled like a fresh one (NICE, engine only, not scheduled). **The agent needs nothing for this:** it already sets the marker and documents it ([6.3](#63-duplicate-ids-and-replay)). *Wire change: no.*
-5. **[Resolved]** **Failure signalling is inconsistent.** *Implemented in agent and engine, unreleased (#5):* a failure the agent detects itself (`harden_running`, `harden_not_triggered`, an unknown outcome) is `ok:false` with a `code` and no `data`; what the harden script reports (`failed`, `rolled_back`) stays `ok:true` with the full audit; recorded results replay as `ok:true`. At protocol 0 nothing changed. The engine reads `code` on the failure path (item 2). `tls_warm` and `http_probe` report failure inside `ok:true` by design and stay that way. *Wire change: done for protocol >= 1 (additive).*
-6. **[Open]** **Unknown-argument policy differs.** `run` rejects unknown keys (default-deny), every other command ignores them. An engine that adds a `run` option for a newer agent gets a hard error from an older one unless it checks a capability flag. *Wire change: no (policy).* *Status: open, NICE, not scheduled.*
-7. **[Open]** **Malformed frames get no reply.** A `cmd` with an empty `id`, or any frame whose known field has the wrong JSON type (for example `args` as an array, `cols` as a string), is dropped silently, so the engine only sees a timeout. A negative acknowledgement would need a new code or frame. *Wire change: yes (additive).* *Status: open, NICE, not scheduled.*
-8. **[Resolved (documented)]** **Result `error` truncation and size were unspecified.** *Documented as implemented in [5.4](#54-size-and-truncation-limits-as-implemented).* The agent sends the full text, the engine keeps 4000 UTF-16 units, `data` is limited only by the 16 MiB frame, and a result over 256 KiB is replayed as a stub. Known nit, left as is: the stub cuts `error` at 4000 bytes, which can split a UTF-8 character. *Wire change: no.*
-9. **[Resolved]** **Cancellation has no ack.** A cancelled command ends with a failure that is cached and replayed for the same id. At protocol >= 1 it carries `code: "cancelled"` (and a deadline carries `timeout`); `harden` keeps `harden_interrupted` at every protocol. There is still no acknowledgement of the cancel itself. *Wire change: code done (additive); an ack would be new.* *Status: `code: "cancelled"` is implemented and final in the engine; an acknowledgement of the cancel itself is not in the plan.*
-10. **[Resolved]** **Resend safety.** *Implemented in agent and engine, unreleased (#10).* The agent persists the running set in `running.json`: a resend of a running id attaches, a finished id is replayed (`replayed:true` from protocol >= 1), and after a restart UNSAFE commands answer `interrupted` while READ and CONVERGE commands run again ([6.3](#63-duplicate-ids-and-replay)). The engine reads the frame-level `replayed`, keeps a replay stub as success without data, treats `interrupted` and `cancelled` as final, and holds a newer lifecycle command behind an older pending one for the same object ([6.7](#67-ordering-and-delivery-guarantees)). *Wire change: yes (additive: the `replayed` field and the `interrupted` code, both protocol >= 1).*
-11. **[Decided]** **The dedupe cache holds 500 results; the engine keeps commands for 24 h.** An id evicted from the cache and re-sent runs again. The engine only issues unique ids, so this is a low risk. *Wire change: no.* *Status: decided. Item 10 added a 25 h age limit next to the 500-entry cap of `done.json`, so an old id is dropped by age too; nothing more is planned.*
-12. **[Dropped (documented)]** **No session semantics for streams, console and database sockets.** These frames are lost while disconnected and never re-sent, `hello_ok` does not say whether the session is new, and an open console or socket on the agent is orphaned when the WebSocket drops. *Wire change: yes.* *Status: dropped. Documented in [4.7](#47-console-session), [4.8](#48-managed-database-channel) and [7.2](#72-what-survives-a-reconnect): these frames are live-only and a console or socket ends at its own deadline.*
-13. **[Resolved]** **Backoff had no jitter, and a replaced connection flapped. Implemented in the agent, unreleased.** Every wait is now jittered; `401`, `403` and `4003` use a separate slow schedule (60 s doubling to 10 min) and never stop the agent; `4000` waits a random 30 to 90 s and the log says another agent may be using the token ([7.1](#71-backoff-and-retry-schedules)). *Wire change: no.*
-14. **[Resolved]** **The agent did not detect a silent link itself. Implemented in the agent, unreleased.** The agent now pings every 20 s with a 10 s timeout and closes the connection on a missed pong, so a dead link is dropped in about 30 s instead of 60 to 80 s ([2.6](#26-keepalive-and-liveness)). The engine already answers pings, so nothing is needed from it, but it **must keep answering `Ping` frames with `Pong`**; an engine that stopped doing so would be dropped every 30 s. The link monitor is unchanged. *Wire change: no.*
-15. **[Resolved]** **Negotiation.** *Implemented in agent and engine, unreleased (#15).* The agent sends `X-F2C-Protocol: 1` and reads optional `protocol`, `minAgent`, `caps` and `serverId` from `hello_ok`; the engine reads the header, sends the fields and closes `4004` when it can speak no offered version ([3.2](#32-negotiation-implemented-in-agent-and-engine-unreleased)). A `serverId` that differs from the configured one logs one warning per session and keeps the session open. **Decided:** `hb.caps` is dropped, because the `*V` flags such as `hardenV` and `hello_ok.caps` cover it. The downgrade guard became item 19. *Wire change: yes (additive, header and optional fields).*
-16. **[Dropped (documented)]** **Reply naming is inconsistent.** `registry_login` is used for both the request and the reply, while the others are `token_rotated` and `dns_token_ok`. Renaming would break the engine. *Wire change: yes.* *Status: dropped. The names stay as they are and are documented in [4.5](#45-secret-bearing-live-frames).*
-17. **[Resolved (documented)]** **The database channel was only partly specified.** *Documented in [4.8](#48-managed-database-channel) and [`database.json`](protocol/schemas/database.json) (#17).* Every operation has its arguments, result and codes; the channel stays live-only with no ack, dedupe or `notAfter` by design, so the engine owns timeouts and retries; `capabilities.protocol` is a separate version number of the channel. *Wire change: no (spec coverage).*
-18. **[Agent done, engine in progress]** **Release integrity gaps. Agent side implemented in agent 0.4.0 (#18); engine side in progress.** `version.json`, `release-keys.json` and the Caddy hashes (`caddy-linux-<arch>`, hash only) are now lines of the signed `SHA256SUMS`, which also has a signed `# ` header ([8.1](#81-release-layout)). `install.sh` checks its support files, `harden.sh` and the Caddy binary against the signed sums (a mismatch is fatal; unlisted files warn for legacy releases unless `F2C_REQUIRE_SIGNED=1`, which becomes the default once the pin is format 2 and the fleet is on 0.4.0 or later). The engine's verification (pin format 2, checks 1 to 9 of [8.3](#83-the-engine-pin-and-what-it-serves)) is the engine's. *Wire change: yes (release format, additive).*
-19. **[Agent done, engine in progress]** **Downgrade guard. Agent side implemented in agent 0.4.0 (#19); engine side in progress.** `self_update` refuses a downgrade, an older build at equal precedence and a release without a signed version unless `rollback:true` with a `reason`, and never goes below the persisted signed floor ([8.4](#84-self-update-and-rollback)); `version`, `rollback` and `reason` are read only at protocol >= 1 and the agent reports `hb.updateV`. `install.sh` has no downgrade check (there is no `--allow-downgrade`). The comparison is shared with the engine through the 28 vectors in [`testdata/version-compare.json`](protocol/testdata/version-compare.json). *Wire change: yes (additive args).*
-20. **[Agent done, engine in progress]** **One key list. Agent side implemented in agent 0.4.0 (#20); engine side in progress.** `keys/release-keys.json` is the single source (key ids of 16 hex, statuses active/retired/revoked); the agent embeds it, `install.sh` carries a generated block that a test and `release.sh` check for drift, and `SHA256SUMS.sigs` lets a release name its signing key by id while the raw `SHA256SUMS.sig` stays for older verifiers ([8.2](#82-signing-and-the-trusted-key-list)). The engine trust file changes only through a signed release. **Key custody:** the release signing key is held offline by the maintainers; a backup key, also `active`, is held separately; the key fingerprints are published in the README and the release notes. **Revocation:** the normal path is a signed release with a higher serial applied to the engine's trust file (never hand-edited); engines should provide an audited, revoke-only emergency procedure for the case of no uncompromised key; recovery of trust after it is manual and out-of-band, and servers that trust no key reinstall with `install.sh`, never through `self_update` ([8.2](#82-signing-and-the-trusted-key-list)). *Wire change: no (additive files).*
-21. **[Open]** **The self-update window starts at process start.** The 60 s connect window and 3-boot limit are measured from agent start, so a slow engine start can cause a rollback of a good binary. *Wire change: no.* *Status: open, NICE, not scheduled.*
-22. **[Open]** **Command id format is only enforced by the engine** (`^[A-Za-z0-9_.:-]{1,80}$`); the agent accepts any non-empty string. *Wire change: no.* *Status: open, NICE, not scheduled.*
-23. **[Open]** **`hb.containers` is `null` when `docker ps` fails** instead of an empty list, and `stats` omits zero `restarts` and `exitCode`, so "absent" and "0" cannot be told apart. *Wire change: no (agent behaviour).* *Status: open, NICE, not scheduled.*
-24. **[Resolved]** **Multi-domain access mapping lived only in the agent.** *Implemented in the engine, unreleased (#24).* The agent still attributes extra public service domains to the parent app's primary host from the `caddy_apply` route ids (including the `-<8 hex>` suffix a colliding route id may get). The engine now adds the app's own service domains (`serviceDomains`) to its host to app map, case-insensitively and ignoring a port, so it does not depend on route ids or their suffix and needs no suffix parsing; the two do not double count, because the agent rewrites the host before the heartbeat and the engine maps the primary host to the app. *Wire change: no.*
-25. **[Open (future)]** **`volume_backup_offsite_restore` is sent by the engine but not implemented by the agent.** The engine's customer off-site code ([4.8](#48-managed-database-channel)) restores a volume from an off-site object with this operation (`{volume, url, objectKey}`, 30 minute wait). The agent has no such operation and answers `db_result {ok:false, code:"invalid_input", status:400}` at every protocol. The engine disables the path until the operation is specified (a restore into an existing volume is destructive and needs its own rules) and agreed. *Wire change: yes (a new operation, additive).*
-
-Documentation nits found while reading, not protocol issues: the comment in `internal/docker/compose.go` mentions five stack capabilities while the code allows four (`CHOWN`, `DAC_OVERRIDE`, `SETGID`, `SETUID`); the console container-name pattern differs from the run name pattern (upper case, 128 characters); `buildPack: "nixpacks"` selects the railpack builder.
+Documentation nits, not protocol issues: the console container-name pattern differs from the run name pattern (upper case, 128 characters); `buildPack: "nixpacks"` selects the railpack builder.
 
 ## Appendix A: Schema index
 
@@ -1415,7 +1371,7 @@ All files are JSON Schema draft 2020-12, with `examples` on the definitions. Rel
 | [`protocol/schemas/database.json`](protocol/schemas/database.json) | `<operation>.args` and `<operation>.result` of the 16 managed-database operations, `errorCode`, `backupKey`, `backup`. |
 | [`protocol/schemas/commands.json`](protocol/schemas/commands.json) | `<type>.args` and `<type>.result` for the 21 commands; `commandType`. |
 | [`protocol/schemas/http.json`](protocol/schemas/http.json) | `join` and `reattach` bodies. |
-| [`protocol/schemas/release.json`](protocol/schemas/release.json) | `version.json`, the engine pin, `release-keys.json` and `SHA256SUMS.sigs`. |
+| [`protocol/schemas/release.json`](protocol/schemas/release.json) | `version.json`, an example engine pin record, `release-keys.json` and `SHA256SUMS.sigs`. |
 | [`protocol/testdata/version-compare.json`](protocol/testdata/version-compare.json) | The 28 shared test vectors of the update guard (version and build comparison, decision order). An engine's implementation must pass the same file. |
 
 ## Appendix B: Files the agent reads and writes for the protocol

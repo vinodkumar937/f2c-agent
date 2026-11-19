@@ -1,6 +1,6 @@
 package update
 
-// Release format and update guard (docs/protocol.md section 8, protocol items #18 to #20): the signed header of SHA256SUMS,
+// Release format and update guard (docs/protocol.md section 8): the signed header of SHA256SUMS,
 // signature checking by key id (SHA256SUMS.sigs) with the legacy raw .sig as a fallback, the downgrade and floor decision,
 // and the persisted floor.
 
@@ -372,6 +372,3 @@ func raiseFloor(stateDir, newFloor, setBy string) {
 	_ = os.MkdirAll(stateDir, 0o700)
 	_ = writeJSONAtomic(floorPath(stateDir), floorFile{Floor: newFloor, SetBy: setBy, At: time.Now().UTC()})
 }
-
-// Floor reports the persisted floor ("" when none), for the log and tests.
-func Floor(stateDir string) string { return readFloor(stateDir) }

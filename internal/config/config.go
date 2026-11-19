@@ -72,7 +72,7 @@ func CheckEngineURL(raw string, insecure bool) (*url.URL, error) {
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") || strings.ContainsAny(raw, "\r\n\t ") {
 		return nil, fmt.Errorf("engine URL must be http(s)://host[:port]")
 	}
-	// Step 9g: TLS (https/wss) is required beyond loopback; --insecure no longer overrides this.
+	// TLS (https/wss) is required beyond loopback; --insecure no longer overrides this.
 	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
 		if insecure {
 			return nil, errors.New("--insecure is no longer supported for non-loopback engines; use https:// (wss)")
@@ -82,7 +82,7 @@ func CheckEngineURL(raw string, insecure bool) (*url.URL, error) {
 	return u, nil
 }
 
-// SaveToken atomically replaces the server token in agent.json (live rotation, step 9g).
+// SaveToken atomically replaces the server token in agent.json (live rotation).
 func SaveToken(stateDir string, c Config, token string) error {
 	c.Token = token
 	b, _ := json.MarshalIndent(c, "", "  ")

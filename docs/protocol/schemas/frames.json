@@ -12,13 +12,13 @@
         },
         "serverId": {
           "type": "string",
-          "description": "The engine's id for this server. If present and different from the agent's configured server id, the agent logs one warning per session and keeps the session open (implemented in agent and engine, unreleased). Missing, empty, non-string or over-long values are ignored.",
+          "description": "The engine's id for this server. If present and different from the agent's configured server id, the agent logs one warning per session and keeps the session open (since agent 0.4.0). Missing, empty, non-string or over-long values are ignored.",
           "maxLength": 128
         },
         "protocol": {
           "type": "integer",
           "minimum": 0,
-          "description": "Optional. The session protocol version: min(agent's X-F2C-Protocol, engine's highest), so 1 today. Missing or invalid means 0 (no negotiation). Implemented in agent and engine, unreleased."
+          "description": "Optional. The session protocol version: min(agent's X-F2C-Protocol, engine's highest), so 1 today. Missing or invalid means 0 (no negotiation). Since agent 0.4.0."
         },
         "minAgent": {
           "type": "string",
@@ -30,7 +30,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Optional. Engine feature strings. Known: \"notAfter\", \"hardenSummary\" and \"resultCode\" (all live in the unreleased engine at protocol >= 1). Unknown strings are ignored."
+          "description": "Optional. Engine feature strings. Known: \"notAfter\", \"hardenSummary\" and \"resultCode\" (sent at protocol >= 1 only). Unknown strings are ignored."
         }
       },
       "required": [
@@ -54,7 +54,7 @@
           ]
         }
       ],
-      "description": "engine -> agent. Sent once, right after the upgrade is accepted, before any re-sent cmd. serverId is checked against the configured id (warning only). protocol, minAgent and caps are optional and additive (implemented in agent and engine, unreleased). An agent decodes them tolerantly: a wrong type falls back to protocol 0 / no caps / no check and never drops the frame."
+      "description": "engine -> agent. Sent once, right after the upgrade is accepted, before any re-sent cmd. serverId is checked against the configured id (warning only). protocol, minAgent and caps are optional and additive (since agent 0.4.0). An agent decodes them tolerantly: a wrong type falls back to protocol 0 / no caps / no check and never drops the frame."
     },
     "hbContainer": {
       "type": "object",
@@ -566,7 +566,7 @@
           "notAfter": "2026-11-18T10:00:00Z"
         }
       ],
-      "description": "engine -> agent. `args` defaults to {}. The currently deployed engine does not send `notAfter` (see open questions)."
+      "description": "engine -> agent. `args` defaults to {}. An engine should send `notAfter` (docs/protocol.md 6.4); older engines do not."
     },
     "ack": {
       "type": "object",
@@ -899,7 +899,7 @@
           "ok": true
         }
       ],
-      "description": "agent -> engine. Same `t` as the request (see open questions)."
+      "description": "agent -> engine. Same `t` as the request (docs/protocol.md 4.5)."
     },
     "dnsToken": {
       "type": "object",

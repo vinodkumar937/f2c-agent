@@ -1,6 +1,6 @@
 package metrics
 
-// Per-app usage (dashboard RAM/CPU/disk): sent batched in every 4th heartbeat (~60s).
+// Per-app usage (RAM/CPU/disk): sent batched in every 4th heartbeat (~60s).
 // CPU/memory come from the container's cgroup when readable, else from ONE `docker stats --no-stream`
 // call for all running managed containers. Disk (writable layer + the app's own named volumes) is
 // measured at most every 30 min, cached, under a timeout; database volumes included (their data size).

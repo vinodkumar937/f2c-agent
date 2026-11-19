@@ -1,6 +1,6 @@
 # f2c-agent. Installed by install.sh; joined with `f2c-agent join` first (install.sh leaves the unit disabled until then).
 [Unit]
-Description=F2C agent (connects out to the control plane over wss)
+Description=F2C agent (connects out to the engine over wss)
 Wants=network-online.target docker.service caddy.service
 After=network-online.target docker.service caddy.service
 # agent.json is written by `f2c-agent join` (config.go): until then the unit is skipped instead of failing and restarting every 5 s.

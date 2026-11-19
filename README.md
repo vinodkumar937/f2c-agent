@@ -24,6 +24,9 @@ official apt repositories if they are missing, sets up a default-deny `ufw` (SSH
 Options: `--roles build|run|build,run`, `--wildcard-domain` and `--dns-provider` (see below), `--version 0.4.0` (or `F2C_VERSION`) to
 pin a release instead of the latest, `--no-firewall`, `--harden` (optional host hardening, off by default), `DRY_RUN=1` to preview.
 `F2C_RELEASE_BASE` points the installer at a mirror of the GitHub release layout (`<base>/v<version>/<file>`).
+Most options also have an environment form (`F2C_ROLES`, `F2C_WILDCARD_DOMAIN`, `F2C_DNS_PROVIDER`, `F2C_ENGINE`, `F2C_JOIN_TOKEN`,
+`F2C_FIREWALL=0|1`); `SKIP_DEPS=1` only checks for Docker and Caddy, `F2C_AGENT_BIN=./f2c-agent` installs a local build (not verified),
+and `--reattach` re-registers a server that already has an `agent.json`. The header of `deploy/install.sh` describes every option.
 
 To read the script before running it, or to verify it first, download it instead of piping it (see [Verify a release](#verify-a-release)):
 
@@ -36,8 +39,7 @@ sudo sh install.sh --roles build,run --version $V
 
 DNS-01 wildcard certificates (`--dns-provider cloudflare|digitalocean`) need the f2c Caddy build, which is published as the GitHub release
 `caddy-v2.11.7-do1-cf1-ad1` of this repository by the `caddy-binaries.yml` workflow (hashes also listed in the signed `SHA256SUMS`).
-**The first Caddy release is still pending**: until it is published those two options stop with a download error that says so. Use
-`--dns-provider other` (stock Caddy, on-demand HTTP-01), or set `F2C_CADDY_URL` (and `F2C_CADDY_TAG`) to your own build.
+Use `--dns-provider other` (stock Caddy, on-demand HTTP-01) instead, or set `F2C_CADDY_URL` (and `F2C_CADDY_TAG`) to your own build.
 
 ## Join an engine later
 
@@ -63,6 +65,12 @@ f2c-agent run  [--state-dir /var/lib/f2c-agent] [--caddy-admin http://127.0.0.1:
 f2c-agent reattach [--engine URL]                                      # after the engine lost this server
 f2c-agent version
 ```
+
+`run` also takes `--caddy-certs DIR` (Caddy's certificate storage to watch), `--access-listen` and `--ask-listen` (loopback addresses for
+Caddy's access log and on-demand TLS ask; defaults `127.0.0.1:9181` and `127.0.0.1:9180`); `join` takes `--provider` and `--public-ip`.
+Environment: `F2C_AGENT_STATE_DIR` (default state dir), `DOCKER_HOST` (a `unix://` socket), `BUILDKIT_HOST` (use this BuildKit instead
+of the `f2c-buildkit` container), `F2C_AGENT_SWEEP=0` (no hourly cleanup of stale image uploads and old `f2c/*` images), `F2C_AGENT_NPM_CI=0` (do not switch
+npm builds with a lockfile to `npm ci`).
 
 ## Verify a release
 
@@ -119,7 +127,7 @@ internal/version/   build version (set with -ldflags -X)
 internal/util/      small shared helpers
 deploy/             install.sh, harden.sh, systemd units and their shell tests
 scripts/release.sh  cross-build, sign and package a release
-docs/               protocol and design notes
+docs/               the protocol specification (protocol.md) and its JSON schemas
 ```
 
 ## Build
@@ -128,7 +136,7 @@ docs/               protocol and design notes
 go vet ./...
 go build -o bin/f2c-agent ./cmd/f2c-agent                                  # local build
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
-  -ldflags "-s -w -X github.com/vinodkumar937/f2c-agent/internal/version.Version=0.1.0" \
+  -ldflags "-s -w -X github.com/vinodkumar937/f2c-agent/internal/version.Version=0.4.0" \
   -o bin/f2c-agent-linux-amd64 ./cmd/f2c-agent
 ```
 

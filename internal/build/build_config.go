@@ -1,7 +1,7 @@
 package build
 
-// Build settings sent by the engine with a `build` command (engine lib/build-config.ts): the app's env at build time
-// and the dashboard overrides (build command, start command, publish/output dir). Empty or whitespace-only values
+// Build settings sent by the engine with a `build` command: the app's env at build time
+// and the build overrides (build command, start command, publish/output dir). Empty or whitespace-only values
 // mean "auto-detect" and are never passed to railpack. Env values never go on the command line: `--env NAME` makes
 // railpack read NAME from its own environment and hand it to BuildKit as a secret.
 
@@ -92,7 +92,7 @@ func parseBuildSettings(args map[string]any) (buildSettings, error) {
 		if s.DockerTarget, derr = cleanDockerTarget(util.Str(args, "dockerTargetBuild")); derr != nil {
 			return s, derr
 		}
-		// A Dockerfile build ignores the dashboard's build/start/output overrides (they stay stored for switching back): a stale
+		// A Dockerfile build ignores the build/start/output overrides (they stay stored for switching back): a stale
 		// startCmd must never replace the image's CMD.
 		s.BuildCmd, s.StartCmd, s.OutDir = "", "", ""
 	}
@@ -106,10 +106,6 @@ func parseBuildSettings(args map[string]any) (buildSettings, error) {
 		}
 	}
 	return s, nil
-}
-
-func (s buildSettings) hasOverrides() bool {
-	return s.BuildCmd != "" || s.StartCmd != "" || s.OutDir != ""
 }
 
 // secretValues: env values to mask in the streamed build log.

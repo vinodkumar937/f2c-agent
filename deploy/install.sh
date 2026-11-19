@@ -12,11 +12,11 @@
 # F2C_AGENT_BIN=./f2c-agent installs a local binary instead (NOT verified against a release; support files then come from
 # next to this script). DRY_RUN=1 prints the steps instead of changing the host (the signed release is still downloaded and checked).
 # Recovery: sudo sh install.sh --reattach [--engine URL] — keeps agent.json, submits orphan inventory.
-# Optional host hardening: --harden (OFF by default). Runs the same harden.sh used by the dashboard, after the
+# Optional host hardening: --harden (OFF by default). Runs the same harden.sh the engine can run, after the
 # agent joins and is connected: always a --dry-run preview first, printed here, then --apply only with
 # F2C_HARDEN_CONFIRM=1 or a typed "yes" (terminal or /dev/tty). F2C_HARDEN_ALLOW_IPS="IP …" adds admin IPs to the
 # SSH/fail2ban allow-list; the installing SSH peer is also always in fail2ban ignoreip (the engine's IPs never are:
-# the agent link is outbound, and the engine sits behind a Cloudflare tunnel).
+# the agent link is outbound).
 # Installs Docker and Caddy from their official apt repos when missing (Ubuntu/Debian; SKIP_DEPS=1 to only check).
 # F2C_ROLES=build,run (default; same roles as the join) or --roles run: build tooling (railpack + the
 # f2c-buildkit image, disk check) is installed only when the roles include build. Idempotent.
@@ -388,7 +388,7 @@ fi
 # lists the Caddy hashes too (release.sh --caddy-dir). Only used with --dns-provider cloudflare|digitalocean.
 F2C_CADDY_TAG="${F2C_CADDY_TAG:-caddy-v2.11.7-do1-cf1-ad1}"
 F2C_CADDY_URL="${F2C_CADDY_URL:-https://github.com/vinodkumar937/f2c-agent/releases/download/$F2C_CADDY_TAG}"
-# Keep in sync with build.go buildkitImage and the engine's railpack.
+# Keep in sync with build.go buildkitImage.
 RAILPACK_VERSION="${RAILPACK_VERSION:-0.41.0}"
 BUILDKIT_IMAGE="${BUILDKIT_IMAGE:-moby/buildkit:v0.34.0}"
 # Railpack $RAILPACK_VERSION's base images (bump together with RAILPACK_VERSION) and the static-site image
@@ -424,7 +424,7 @@ if [ $need_docker = 1 ] || [ $need_caddy = 1 ]; then
   ID=""
   # shellcheck disable=SC1091
   [ -r /etc/os-release ] && . /etc/os-release
-  # DRY_RUN on a non-Debian host (e.g. the Mac): preview as if Ubuntu instead of stopping.
+  # DRY_RUN on a non-Debian host (e.g. macOS): preview as if Ubuntu instead of stopping.
   [ "${DRY_RUN:-0}" = 1 ] && [ -z "${ID:-}" ] && { ID=ubuntu; VERSION_CODENAME=noble; echo "install.sh: DRY_RUN on non-Debian host: previewing as ubuntu/noble"; }
   case "${ID:-}" in ubuntu | debian) ;; *) echo "install.sh: auto-install supports Ubuntu/Debian only (found ${ID:-unknown}); install Docker and Caddy yourself" >&2; exit 1 ;; esac
   run env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gnupg
@@ -444,7 +444,7 @@ id f2c-agent >/dev/null 2>&1 || run useradd --system --home-dir "$STATE" --shell
 run usermod -aG docker f2c-agent
 run install -d -m 0700 -o f2c-agent -g f2c-agent "$STATE"
 
-# build tooling (M2.7): only for build-role servers
+# build tooling: only for build-role servers
 case ",$ROLES," in
   *,build,*)
     avail_kb=$(df -Pk /var/lib/docker 2>/dev/null | awk 'NR==2{print $4}' || true)
@@ -477,7 +477,7 @@ case ",$ROLES," in
     if docker image inspect "$BUILDKIT_IMAGE" >/dev/null 2>&1; then echo "install.sh: $BUILDKIT_IMAGE present"; else run docker pull "$BUILDKIT_IMAGE"; fi
     # Warm the f2c-buildkit cache with Railpack's builder/runtime images (~430 MB on a fresh server) and the
     # static Caddy image. Same container/volume as build.go ensureBuildkit. Best-effort: never fails the install.
-    # B3: buildctl has no "cacheonly" exporter (that is buildx); a build with no --output just fills the cache.
+    # buildctl has no "cacheonly" exporter (that is buildx); a build with no --output just fills the cache.
     prewarm_buildkit() {
       if [ "$(docker inspect -f '{{.State.Running}}' f2c-buildkit 2>/dev/null)" != true ]; then
         docker start f2c-buildkit >/dev/null 2>&1 || docker run -d --name f2c-buildkit --restart unless-stopped --privileged \
@@ -507,7 +507,7 @@ esac
 run install -d -m 0755 /etc/systemd/system/caddy.service.d
 run install -m 0644 "$RESUME_FILE" /etc/systemd/system/caddy.service.d/f2c-resume.conf
 
-# M2.8: f2c Caddy (DNS-01 modules) + EnvironmentFile drop-in, only with --dns-provider
+# f2c Caddy (DNS-01 modules) + EnvironmentFile drop-in, only with --dns-provider
 if [ -n "$DNS_PROVIDER" ] && [ "$DNS_PROVIDER" != other ]; then # other: stock Caddy, on-demand HTTP-01
   case "$(uname -m)" in x86_64 | amd64) cd_arch=amd64 ;; aarch64 | arm64) cd_arch=arm64 ;; *) echo "install.sh: no f2c Caddy build for $(uname -m)" >&2; exit 1 ;; esac
   if caddy list-modules 2>/dev/null | grep -q "^dns.providers.$DNS_PROVIDER\$"; then
@@ -557,7 +557,7 @@ if [ -n "$DNS_PROVIDER" ] && [ "$DNS_PROVIDER" != other ]; then # other: stock C
     run setfacl -m u:f2c-agent:x /etc/f2c-agent || true
   fi
   if [ "${DRY_RUN:-0}" = 1 ]; then echo "+ write /etc/systemd/system/caddy.service.d/f2c-dns.conf: [Service] EnvironmentFile=-/etc/f2c-agent/caddy-dns.env"; else
-    printf '# M2.8: DNS provider env for DNS-01 ({env.DO_AUTH_TOKEN}/{env.CF_API_TOKEN})\n[Service]\nEnvironmentFile=-/etc/f2c-agent/caddy-dns.env\n' > /etc/systemd/system/caddy.service.d/f2c-dns.conf
+    printf '# DNS provider env for DNS-01 ({env.DO_AUTH_TOKEN}/{env.CF_API_TOKEN})\n[Service]\nEnvironmentFile=-/etc/f2c-agent/caddy-dns.env\n' > /etc/systemd/system/caddy.service.d/f2c-dns.conf
   fi
 fi
 
@@ -571,7 +571,7 @@ if command -v ufw >/dev/null 2>&1; then # only the two allow rules that install 
   for r in 53/udp 53/tcp; do if ufw show added 2>/dev/null | grep -qx "ufw allow $r"; then run ufw delete allow "$r"; fi; done
 fi
 
-# Step 4: certwatch prefers TLS SNI (no file access). Filesystem scan is a supplement for all providers:
+# certwatch prefers TLS SNI (no file access). Filesystem scan is a supplement for all providers:
 # f2c-agent in group caddy, group-traversable cert dirs, default ACLs (Caddy renewals rewrite 0600/0700),
 # and ReadOnlyPaths in f2c-agent.service under ProtectSystem=strict.
 if id f2c-agent >/dev/null 2>&1 && getent group caddy >/dev/null 2>&1; then
@@ -671,7 +671,7 @@ else
   fi
 fi
 
-# Optional hardening support (installed now; OFF until --harden or an explicit dashboard action). Path unit is the
+# Optional hardening support (installed now; OFF until --harden or an explicit engine request). Path unit is the
 # minimal root bridge: agent can only write a validated harden request. No sudoers/polkit, NNP stays on. Only the
 # watcher is enabled; the root oneshot has no [Install] section and is never enabled at boot.
 HARDEN_SCRIPT=$(support harden.sh)
@@ -720,6 +720,7 @@ install_agent() (
   if [ -f "$AGENT_BIN.prev" ]; then cp -p "$AGENT_BIN.prev" "$SAVE/binary.prev"; HAD_PREV=1; fi
   if [ -f /usr/local/bin/f2c-agent ]; then cp -p /usr/local/bin/f2c-agent "$SAVE/legacy-binary"; fi
   if systemctl is-active --quiet f2c-agent.service; then WAS_ACTIVE=1; fi
+  # shellcheck disable=SC2329 # called from the EXIT trap below
   agent_install_finish() {
     code=$1
     trap - 0

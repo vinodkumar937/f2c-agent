@@ -4,14 +4,14 @@
 # Usage (from the repo root; the version is required, there is no default):
 #   bash scripts/release.sh 0.4.0
 #   F2C_AGENT_VERSION=0.4.0 bash scripts/release.sh
-#   F2C_RELEASE_SIGNING_KEY=~/.f2c-release/ed25519.pem bash scripts/release.sh 0.4.0
+#   F2C_RELEASE_SIGNING_KEY=/path/to/ed25519.pem bash scripts/release.sh 0.4.0
 #   F2C_AGENT_BIN_DIR=/path/to/agent-bin bash scripts/release.sh 0.4.0 --install
 #   bash scripts/release.sh 0.4.0 --no-sign   (build and check everything, sign nothing; never touches a key file; NOT publishable)
 #
 # Options and environment:
 #   <version>                 X.Y.Z (a +YYYYMMDDHHMM build stamp is appended unless the argument already has one). The GitHub tag is v<X.Y.Z>.
 #   --no-sign                 the only way to skip signing: SHA256SUMS.sig/.sigs are not written and the key path is not looked at. Without
-#                             it a missing or unreadable signing key (F2C_RELEASE_SIGNING_KEY, default ~/.f2c-release/ed25519.pem) is an error.
+#                             it a missing or unreadable signing key (F2C_RELEASE_SIGNING_KEY, or the built-in default path) is an error.
 #   --caddy-dir DIR           (or F2C_CADDY_DIR) a directory with caddy-linux-amd64 and caddy-linux-arm64: their sha256 are listed in
 #                             SHA256SUMS (hash only, the binaries are published by the caddy-binaries.yml workflow). Needed for
 #                             --dns-provider installs: install.sh refuses a Caddy binary that the signed SHA256SUMS does not list.
@@ -130,13 +130,13 @@ for arch in "${ARCHES[@]}"; do
   )
 done
 
-# Deploy files the engine serves next to the binaries (install.sh, harden.sh, systemd units, Caddy drop-in). They are copied flat
+# Install files that ship next to the binaries (install.sh, harden.sh, systemd units, Caddy drop-in). They are copied flat
 # into the release and listed in the signed SHA256SUMS, so one signature covers the binaries and the install files.
 DEPLOY_FILES=(install.sh harden.sh f2c-agent.service f2c-harden.path f2c-harden.service f2c-caddy-dns-env.path f2c-caddy-dns-env.service caddy-resume.conf)
 for f in "${DEPLOY_FILES[@]}"; do
   cp "$AGENT_DIR/deploy/$f" "$OUT_DIR/$f"
 done
-# The trusted-key list ships with the release (the engine's trust file is updated from it, see docs/protocol.md 8.5).
+# The trusted-key list ships with the release (an engine's trust file is updated from it, see docs/protocol.md 8.3).
 cp "$AGENT_DIR/keys/release-keys.json" "$OUT_DIR/release-keys.json"
 
 # Caddy: hash only (the binaries are built elsewhere and are not part of this release). Needs --caddy-dir or F2C_CADDY_DIR.

@@ -1,6 +1,6 @@
 package build
 
-// engine-multimode M2.6: the run side of a registry-free transfer. `load` downloads a staged transfer (one-time
+// The run side of a registry-free transfer. `load` downloads a staged transfer (one-time
 // token), enforces size + sha256, `docker load`s it and verifies the loaded image ID against the builder's. A load
 // whose image ID is already present skips the download (the token is simply never used). `image_present` lets the
 // engine skip export/upload/download entirely. The sweeper removes old f2c/* images (keeps current + previous per
@@ -146,7 +146,7 @@ func runLoad(ctx context.Context, root, id string, spec loadSpec, bl *buildLog) 
 	if spec.ImageID != "" && imgID != spec.ImageID {
 		return nil, protocol.WithCode(protocol.CodeBuildFailed, fmt.Errorf("loaded %s has image ID %s, expected %s", spec.Image, imgID, spec.ImageID))
 	}
-	// M2.12 safety net: an image for another CPU type would crash-loop ("exec format error"); refuse it here.
+	// Safety net: an image for another CPU type would crash-loop ("exec format error"); refuse it here.
 	if arch, _ := docker.CLI(ctx, "image", "inspect", "-f", "{{.Architecture}}", spec.Image); arch != "" && sysinfo.NormArch(arch) != sysinfo.HostArch() {
 		_, _ = docker.CLI(ctx, "image", "rm", spec.Image)
 		return nil, protocol.WithCode(protocol.CodeBuildArchMismatch, fmt.Errorf("build_arch_mismatch: %s is linux/%s but this server is linux/%s", spec.Image, sysinfo.NormArch(arch), sysinfo.HostArch()))

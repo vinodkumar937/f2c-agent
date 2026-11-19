@@ -1,10 +1,10 @@
 package docker
 
 // Docker Compose stacks (agent side). The engine translates a compose file into plain `run` specs (never `docker compose up`);
-// this file adds what those specs need on top of the step 9d `run` options in commands.go:
+// this file adds what those specs need on top of the `run` options in containers.go:
 //   - heartbeat capability "composeV" (composeCap): the engine refuses to send stack specs to an agent without it;
 //   - stack `run` options: noPublish, aliases, health, entrypoint, user, workdir, readOnly, init, stopTimeoutS, capProfile, capAdd;
-//   - the stack-v1 hardening profile: --cap-drop ALL, --security-opt no-new-privileges, and an add-back limited to the five
+//   - the stack-v1 hardening profile: --cap-drop ALL, --security-opt no-new-privileges, and an add-back limited to the four
 //     capabilities the official database images need (the engine chooses the per-image list; the agent only enforces that nothing outside stackCapAllow can ever be added);
 //   - network_rm / volume_rm for stack deletes, and `stats` detail (health, restarts, exit code, start time).
 // Default deny stays: parseRunOptions refuses every key that is not in runArgKeys.
@@ -41,7 +41,7 @@ var (
 )
 
 // stackVolumePrefix: stack volumes are f2c-<engineApp>-<volume> and every engine app name starts with f2c-, so volume_rm is
-// limited to this namespace and can never touch the platform's own volumes (f2c-pgdata, f2c-net data, ...).
+// limited to this namespace and can never touch volumes that are not stack volumes.
 const stackVolumePrefix = "f2c-f2c-"
 
 type healthSpec struct {

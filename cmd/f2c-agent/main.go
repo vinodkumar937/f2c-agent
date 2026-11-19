@@ -1,6 +1,6 @@
 // Command f2c-agent runs on an F2C app server. It dials the engine over WSS (/agent), sends a heartbeat every
-// 15s, and executes engine commands (pull, run, stop, rm, logs, stats, exec, caddy_apply, cert_install, http_probe) against
-// the local Docker and Caddy. It only touches containers it created (label f2c.agent=1).
+// 15s, and executes engine commands (docs/protocol.md section 4.9) against the local Docker and Caddy. It only
+// touches containers it created (label f2c.agent=1).
 //
 //	f2c-agent join --engine https://engine.example --token f2cj_...   # one-time: exchange for a server token
 //	f2c-agent reattach                                                # after engine lost this server: submit identity+inventory as orphan
@@ -51,8 +51,8 @@ func main() {
 		caddyAdmin := fs.String("caddy-admin", "http://127.0.0.1:2019", "local Caddy admin API")
 		certDir := fs.String("cert-dir", "", "certificate directory (default <state-dir>/certs)")
 		insecure := fs.Bool("insecure", false, "deprecated: ws:// is only allowed to a loopback engine")
-		caddyCerts := fs.String("caddy-certs", "/var/lib/caddy/.local/share/caddy/certificates", "Caddy certificate storage to watch for issued certs (step 4)")
-		accessListen := fs.String("access-listen", "127.0.0.1:9181", "loopback address for Caddy's JSON access log (feature C)")
+		caddyCerts := fs.String("caddy-certs", "/var/lib/caddy/.local/share/caddy/certificates", "Caddy certificate storage to watch for issued certs")
+		accessListen := fs.String("access-listen", "127.0.0.1:9181", "loopback address for Caddy's JSON access log")
 		askListen := fs.String("ask-listen", "127.0.0.1:9180", "loopback address for Caddy's on-demand TLS ask (/tls/ask)")
 		_ = fs.Parse(os.Args[2:])
 		cfg, err := config.Load(*stateDir)

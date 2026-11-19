@@ -1,6 +1,6 @@
 package harden
 
-// Optional "Harden server" (admin dashboard -> engine -> agent command "harden"). Off by default.
+// Optional "Harden server" (engine -> agent command "harden"). Off by default.
 //
 // The agent is non-root (User=f2c-agent, NoNewPrivileges=yes), so it cannot run harden.sh itself and gets no sudo or
 // polkit grant. It writes a validated key=value request into its own state dir (<state>/harden/request); the root
@@ -8,13 +8,13 @@ package harden
 // /usr/local/lib/f2c/harden.sh (re-validates every value, deletes the request) and writes its JSON result to
 // /var/lib/f2c-harden/results/<runId>.json (0640 root:f2c-agent). The agent polls for that file and returns it.
 //
-// Run ids are handled once (H2): every id is recorded in <state>/harden/runs.json (0600, newest 200) before the
+// Run ids are handled once: every id is recorded in <state>/harden/runs.json (0600, newest 200) before the
 // request is written, so a repeat of the same id (engine re-send after a reconnect, agent restart, done.json
 // eviction, agent rollback that keeps its state dir) is never run again; it gets the earlier result, unchanged, plus
-// "replayed": true (agreed 1d: a replay is not an error code). The agent also watches f2c-harden.service, so a script
+// "replayed": true (a replay is not an error code). The agent also watches f2c-harden.service, so a script
 // that exits without a result, or a request the unit never picks up, fails within seconds instead of after the
 // full wait, and every run is logged as structured "harden event=..." journal lines.
-// Needs an agent rebuild (release.sh --install) and install.sh re-run (units + script) at commit time.
+// The units and the script are installed by install.sh.
 
 import (
 	"context"
@@ -78,7 +78,7 @@ var (
 )
 
 // errHardenNotInstalled: the engine maps this prefix to harden_not_installed.
-// Result message code (protocol 2a): "harden_not_installed"; the text is unchanged.
+// Result message code: "harden_not_installed"; the text is unchanged.
 var errHardenNotInstalled = protocol.WithCode(protocol.CodeHardenNotInstalled, errors.New("harden_not_installed: harden.sh or f2c-harden.path missing or inactive; re-run install.sh on this server"))
 
 type hardenRequest struct {
@@ -204,10 +204,10 @@ func (a *Service) Run(ctx context.Context, args map[string]any) (any, error) {
 	w := &hardenWait{path: resultPath, runID: req.RunID, mode: req.Mode, request: filepath.Join(dir, "request"), queuedAt: time.Now()}
 	w.before, _ = hardenUnitState(ctx)
 	tmp := filepath.Join(dir, ".request.tmp")
-	if err := os.WriteFile(tmp, req.encode(), 0o600); err == nil {
-		err = os.Rename(tmp, w.request) // the rename triggers f2c-harden.path
-	} else {
+	if err = os.WriteFile(tmp, req.encode(), 0o600); err != nil {
 		err = fmt.Errorf("write request: %w", err)
+	} else {
+		err = os.Rename(tmp, w.request) // the rename triggers f2c-harden.path
 	}
 	if err != nil {
 		setHardenActive("")
@@ -251,7 +251,7 @@ func (a *Service) Run(ctx context.Context, args map[string]any) (any, error) {
 		return out, nil
 	case <-ctx.Done():
 		hardenLog("cancelled", req.RunID, "still following the run to record its outcome")
-		// code harden_interrupted (agreed 1f): the engine stops waiting; the root run itself is not interrupted
+		// code harden_interrupted: the engine stops waiting; the root run itself is not interrupted
 		return nil, protocol.WithCode(protocol.CodeHardenInterrupted, errors.New("harden: cancelled while waiting for the result (the run may still finish on the server; the agent keeps following it and a re-send of this run id returns its outcome)"))
 	case <-timer.C:
 		hardenLog("timeout", req.RunID, "no result after %s; still following the run", hardenTimeout)
@@ -275,7 +275,7 @@ func errHardenState(path string, err error) error {
 	return protocol.WithCode(protocol.CodeHardenStateUnreadable, fmt.Errorf("harden_state_unreadable: %s cannot be read (%v); not running, so that no run id is ever run twice. Move the file away to reset the run history", path, err))
 }
 
-// ---------- run id history (H2) ----------
+// ---------- run id history ----------
 
 type hardenRun struct {
 	ID          string `json:"id"`
@@ -692,7 +692,7 @@ func (a *Service) SafeSummary() (hs map[string]any) {
 	return a.hardenSummary()
 }
 
-// ---------- heartbeat summary (follow-up 9.3) ----------
+// ---------- heartbeat summary ----------
 
 // SummaryVersion is sent as hb.hardenV and hb.harden.v.
 const (

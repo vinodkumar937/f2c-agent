@@ -1,6 +1,6 @@
 package databases
 
-// Step 185. Database operations use live frames, never the persistent command/result queue.
+// Database operations use live frames, never the persistent command/result queue.
 // The engine is the authenticated authority for org->resource assignment; first registration
 // pins that assignment to a managed, labelled container and its inspected named volume.
 

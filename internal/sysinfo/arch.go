@@ -4,7 +4,7 @@ import (
 	"runtime"
 )
 
-// HostArch is this server's CPU architecture as the engine records it (M2.12 arch check): "amd64" or "arm64";
+// HostArch is this server's CPU architecture as the engine records it: "amd64" or "arm64";
 // anything else is passed through as-is (the engine treats it as not matching either).
 func HostArch() string { return NormArch(runtime.GOARCH) }
 

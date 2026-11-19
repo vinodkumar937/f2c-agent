@@ -1,6 +1,6 @@
 package build
 
-// engine-multimode M2.5: image transfer without a registry. A relay `build` (uploadUrl + uploadToken) exports the
+// Image transfer without a registry. A relay `build` (uploadUrl + uploadToken) exports the
 // built image (`docker save | gzip`) to a file in the build dir, hashes it and PUTs it to the engine with its sha256
 // and size; the engine re-hashes and rejects a mismatch. `load` fetches a staged transfer with a one-time token,
 // enforces the size cap, verifies the sha256 and only then `docker load`s it. Tokens only ever go in the

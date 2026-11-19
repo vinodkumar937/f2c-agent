@@ -1,5 +1,5 @@
 # f2c-caddy: stock Caddy 2.11.7 plus the caddy-dns/digitalocean, caddy-dns/cloudflare and caddy-dns/acmedns DNS providers, used for
-# DNS-01 wildcard certificates (the engine's base-domain wildcard and per-server wildcards).
+# DNS-01 wildcard certificates. An alternative way to build the same Caddy as the caddy-binaries.yml workflow.
 # Tag: f2c-caddy:2.11.7-do1-cf1-ad1 (keep in sync with F2C_CADDY_TAG in deploy/install.sh and the pins in
 # .github/workflows/caddy-binaries.yml). caddy-dns/digitalocean has no release tags, so it is pinned to a commit (2025-06-06);
 # caddy-dns/cloudflare is pinned to release v0.2.4; caddy-dns/acmedns ("Other" provider) to release v0.7.0.

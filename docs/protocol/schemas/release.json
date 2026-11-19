@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.com/f2c-agent/protocol/v1/release.json",
   "title": "F2C agent protocol: release artifacts",
-  "description": "version.json, an engine's pin of a release (agent-release.json), release-keys.json (the trusted key list) and SHA256SUMS.sigs (spec 1.0-draft, protocol v1). SHA256SUMS is coreutils text with a '# ' header (docs/protocol.md section 8.1) and SHA256SUMS.sig is 64 raw bytes; neither has a JSON form.",
+  "description": "version.json, an example of an engine's pin of a release, release-keys.json (the trusted key list) and SHA256SUMS.sigs (spec 1.0-draft, protocol v1). SHA256SUMS is coreutils text with a '# ' header (docs/protocol.md section 8.1) and SHA256SUMS.sig is 64 raw bytes; neither has a JSON form.",
   "$defs": {
     "versionJson": {
       "type": "object",
@@ -225,7 +225,7 @@
           "sumsFile": "SHA256SUMS",
           "signatureFile": "SHA256SUMS.sig",
           "signaturesFile": "SHA256SUMS.sigs",
-          "keysSerial": 1,
+          "keysSerial": 2,
           "caddy": {
             "tag": "caddy-v2.11.7-do1-cf1-ad1",
             "sha256": {
@@ -235,7 +235,7 @@
           }
         }
       ],
-      "description": "version.json: the release manifest. It is not itself signed (see open questions)."
+      "description": "version.json: the release manifest. It is not itself signed, but it is listed in the signed `SHA256SUMS` (docs/protocol.md 8.1)."
     },
     "agentReleasePin": {
       "type": "object",
@@ -530,7 +530,7 @@
         },
         "format": {
           "const": 2,
-          "description": "Absent means format 1 (the 13-file pin). Format 2 adds the two files above, caddy, keys, and optionally supersedes and rollback. The engine and a format 2 pin are released and rolled back together."
+          "description": "Absent means format 1 (the 13-file pin). Format 2 adds the two files above, caddy, keys, and optionally supersedes and rollback. The engine and a format 2 pin should be released and rolled back together."
         },
         "caddy": {
           "type": "object",
@@ -598,7 +598,7 @@
         "supersedes": {
           "type": "string",
           "pattern": "^[A-Za-z0-9._+-]+$",
-          "description": "The pin version this pin replaces: the authoritative chain for the engine's high-water check."
+          "description": "The pin version this pin replaces: the authoritative chain for the engine's check that versions never go backwards."
         },
         "rollback": {
           "type": "object",
@@ -617,7 +617,7 @@
             "at"
           ],
           "additionalProperties": true,
-          "description": "Present only on a deliberate pin to an older version; needs supersedes equal to the high-water mark. Never allowed below a signed floor."
+          "description": "Present only on a deliberate pin to an older version; needs supersedes equal to the highest version the engine has verified. Never allowed below a signed floor."
         }
       },
       "required": [
@@ -690,7 +690,7 @@
         {
           "repo": "example-org/f2c-agent",
           "tag": "v0.4.0",
-          "version": "0.4.0+202611201015",
+          "version": "0.4.0+202611190506",
           "format": 2,
           "files": {
             "SHA256SUMS": {
@@ -765,13 +765,13 @@
             }
           },
           "keys": {
-            "serial": 1,
+            "serial": 2,
             "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
           },
           "supersedes": "0.3.1+202611181227"
         }
       ],
-      "description": "agent-release.json: an engine's pin of a release. Format 1: exactly 13 files. Format 2: 15 files plus caddy, keys, supersedes and rollback.",
+      "description": "An engine's pin of a release (an example record; the format is engine-defined). Format 1: exactly 13 files. Format 2: 15 files plus caddy, keys, supersedes and rollback.",
       "allOf": [
         {
           "if": {

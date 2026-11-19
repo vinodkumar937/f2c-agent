@@ -1,10 +1,10 @@
 package build
 
-// engine-multimode M2.1: the agent `build` command.
+// The agent `build` command.
 // Downloads the build context from the engine (one-time token in the Authorization header), verifies size and
 // sha256, unpacks it safely (no absolute paths, no "..", no symlink escapes, no device files), makes sure a local
 // BuildKit is available, runs railpack and tags the image f2c/<app>:<tag> in the local Docker. The build dir is
-// always removed. M2.2: output streams to the engine as stream frames (build_log.go), cancel kills the whole
+// always removed. Output streams to the engine as stream frames (build_log.go), cancel kills the whole
 // process group, and a failed/cancelled build removes its partial image tag.
 
 import (
@@ -45,7 +45,7 @@ const (
 	maxBuildEntries       = 200_000
 	defaultBuildTimeout   = 30 * time.Minute
 	buildkitContainer     = "f2c-buildkit"
-	buildkitImage         = "moby/buildkit:v0.34.0" // keep in sync with BUILDKIT_IMAGE (engine pipeline/build.ts)
+	buildkitImage         = "moby/buildkit:v0.34.0" // keep in sync with BUILDKIT_IMAGE (deploy/install.sh)
 	buildkitStateVolume   = "f2c-buildkit-state"
 )
 
@@ -58,9 +58,9 @@ type buildSpec struct {
 	URL, Token, SHA256, App, Tag string
 	MaxBytes                     int64
 	Timeout                      time.Duration
-	UploadURL, UploadToken       string // M2.5 relay: export the image to the engine after building
+	UploadURL, UploadToken       string // relay: export the image to the engine after building
 	UploadMaxBytes               int64
-	Settings                     buildSettings // env at build time + dashboard overrides (build_config.go)
+	Settings                     buildSettings // env at build time + the app's build overrides (build_config.go)
 }
 
 func parseBuildArgs(args map[string]any) (buildSpec, error) {

@@ -1,6 +1,6 @@
 package agent
 
-// Item 7: reattach after the engine lost this server's record (e.g. platform DB / servers.json wipe).
+// Reattach after the engine lost this server's record (e.g. its database was wiped).
 // The agent presents its existing server token + untrusted inventory. The engine records an orphan
 // pending admin approval; it does NOT auto-admit the machine or bind it to an org/server.
 
@@ -100,7 +100,7 @@ func collectDatabaseInventory(stateDir string) []map[string]any {
 		if json.Unmarshal(b, &s) != nil {
 			return nil
 		}
-		// Never include credentials — inventory is untrusted and may be shown in admin UI.
+		// Never include credentials — inventory is untrusted and may be shown to an operator.
 		rows = append(rows, map[string]any{
 			"orgId": s.Org, "databaseName": s.Name, "type": s.Type,
 			"container": s.Container, "volume": s.Volume, "generation": s.Generation,

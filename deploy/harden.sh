@@ -28,8 +28,8 @@
 #     `systemctl reload` (never restart); drop-in rolled back on any failure.
 #   - fail2ban: one drop-in, /etc/fail2ban/jail.d/zz-f2c-harden.local ([sshd], read last). ignoreip is ADDED to the
 #     operator's list (`%(known/ignoreip)s …`, else an explicit merged list). Ours: loopback, --allow-ip and the SSH
-#     sessions open during harden; never the engine's IPs (outbound-only agent link; the engine sits behind a
-#     Cloudflare tunnel, so its resolved IPs are shared Cloudflare addresses). Verified with `fail2ban-client -d` on a
+#     sessions open during harden; never the engine's IPs (the agent link is outbound-only, so the engine never
+#     connects in over SSH). Verified with `fail2ban-client -d` on a
 #     copy of the config before writing and with `fail2ban-client get sshd ignoreip` after; backend, port,
 #     maxretry, findtime and bantime are only set when the operator left them unset.
 #   - Pre-checks (agent active + connected, engine reachable, sshd valid, ssh listening) gate --apply; the same
@@ -55,7 +55,7 @@ BACKUPS="$STATE_DIR/backups"
 SSHD_DROPIN=/etc/ssh/sshd_config.d/00-f2c-harden.conf
 F2B_ETC=/etc/fail2ban
 F2B_DROPIN=$F2B_ETC/jail.d/zz-f2c-harden.local
-F2B_OLD_FILES=("$F2B_ETC/jail.d/00-f2c-harden-ignoreip.local" "$F2B_ETC/jail.d/f2c-harden-sshd.local") # earlier drafts
+F2B_OLD_FILES=("$F2B_ETC/jail.d/00-f2c-harden-ignoreip.local" "$F2B_ETC/jail.d/f2c-harden-sshd.local") # drop-ins of earlier versions
 INFLIGHT=$STATE_DIR/inflight   # "<run id> <backup dir> <result dir>" while an apply is changing the host
 AUDIT_LOG=$STATE_DIR/audit.log
 HARDEN_BUDGET_S=900            # 15 min of steps; f2c-harden.service TimeoutStartSec is 20 min
@@ -138,7 +138,7 @@ words_missing() { # "WANT" "HAVE": the words of WANT that are not in HAVE
   printf '%s' "${out% }"
 }
 
-# --- SSH (H1): who can still log in with a key once passwords are off ---
+# --- SSH: who can still log in with a key once passwords are off ---
 KEY_TYPES='ssh-rsa|ssh-ed25519|ssh-dss|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com'
 # key_line_class LINE -> usable | restricted:<why> | none (blank, comment, not a key line)
 key_line_class() {
@@ -281,7 +281,7 @@ user_key_verdict() {
   if [[ -n $first ]]; then echo "unusable:only restricted keys (${first#restricted:})"; else echo "unusable:no authorized key"; fi
 }
 
-# --- fail2ban (H3): add to the operator's settings, never replace them ---
+# --- fail2ban: add to the operator's settings, never replace them ---
 # f2b_user_keys FILE...: "<section> <key>" for every option set in these INI files (lowercase)
 f2b_user_keys() {
   awk '
@@ -430,7 +430,7 @@ done
 [[ -n $BACKUP_ID ]] && { valid_backup_id "$BACKUP_ID" || die_usage "bad backup id"; }
 [[ -n $RUN_ID || $MODE == stop-post ]] || RUN_ID="harden-cli-$(date -u +%Y%m%d%H%M%S)"
 [[ $(id -u) == 0 ]] || die_usage "run as root"
-# H2 (root side): a run id that already has a result was handled; never run it twice and never overwrite its result.
+# Run ids (root side): a run id that already has a result was handled; never run it twice and never overwrite its result.
 if [[ -n $REQUEST && -n $RESULT_DIR && -f $RESULT_DIR/$RUN_ID.json ]]; then
   echo "harden.sh: run $RUN_ID already has a result; not running it again" >&2
   audit duplicate "" "" "result already present; not run again"
@@ -496,7 +496,7 @@ for p in "${SSH_PORT_ARR[@]+"${SSH_PORT_ARR[@]}"}"; do
 done
 PEER_IPS=$(tr ' ' '\n' <<< "$PEER_IPS" | awk 'NF' | sort -u | tr '\n' ' ')
 
-# H1: who can still log in with a key, from the EFFECTIVE per-connection sshd config (Match blocks included).
+# Who can still log in with a key, from the EFFECTIVE per-connection sshd config (Match blocks included).
 # Probe addresses: the open SSH sessions' and the --allow-ip (single address) ones; a candidate counts only when it is
 # usable from every probe address. `sshd -T -C` must work; otherwise nothing is guessed and passwords stay on.
 KEY_USERS=() KEY_SKIPS=() KEYS_NOTE="" PROBE_NOTE="" PROBE_ADDRS=""
@@ -669,7 +669,7 @@ step_unattended_upgrades() {
   else step_done $id unchanged "" "already on"; fi
 }
 
-# H3: the operator's fail2ban settings win. One drop-in, read last, that ADDS our ignoreip entries to whatever the
+# The operator's fail2ban settings win. One drop-in, read last, that ADDS our ignoreip entries to whatever the
 # operator configured and sets the other sshd options only where nothing but fail2ban's own jail.conf sets them.
 f2b_dump_ignoreip() { # DIR: the sshd jail's ignoreip as fail2ban itself resolves it (fails if the config does not parse)
   local out
@@ -720,7 +720,7 @@ step_fail2ban() {
   else
     before="" want=$ours mode=new content=$(f2b_dropin_content explicit "$ours" "$ports" "$unset")
   fi
-  for f in "${F2B_OLD_FILES[@]}"; do # earlier f2c drafts (replaced [DEFAULT] ignoreip): ours to remove
+  for f in "${F2B_OLD_FILES[@]}"; do # earlier f2c versions (replaced [DEFAULT] ignoreip): ours to remove
     [[ -e $f ]] || continue
     ch_add file "$f" remove; changed=1
     ((DRY)) || { backup_file $id "$f" && rm -f -- "$f"; } || { step_done $id failed write_failed "could not remove $f"; return 1; }

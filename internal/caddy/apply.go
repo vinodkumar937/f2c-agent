@@ -23,18 +23,18 @@ import (
 )
 
 // Apply loads a full JSON config into the local Caddy (POST /load on the admin API: atomic, a rejected
-// Config keeps the running one). Optional hosts (step 9e) replace the /tls/ask allow-list after a successful load.
+// Config keeps the running one). Optional hosts replace the /tls/ask allow-list after a successful load.
 func (a *Manager) Apply(ctx context.Context, args map[string]any) (any, error) {
 	cfg, ok := args["config"].(map[string]any)
 	if !ok {
 		return nil, protocol.BadRequest(errors.New("config must be a JSON object"))
 	}
-	setIssuanceBlocked(args["issuanceBlocked"]) // step 4: LE cap per registered domain (engine-computed)
+	setIssuanceBlocked(args["issuanceBlocked"]) // Let's Encrypt cap per registered domain (engine-computed)
 	hosts, err := parseAskHosts(args["hosts"])
 	if err != nil {
 		return nil, err
 	}
-	// M2.9: the server's wildcard via DNS-01 (token from the 0600 file the engine sent with dns_token).
+	// the server's wildcard via DNS-01 (token from the 0600 file the engine sent with dns_token).
 	wildcard, err := a.applyDNSPolicy(cfg, args["wildcard"])
 	if err != nil {
 		return nil, err
@@ -42,10 +42,6 @@ func (a *Manager) Apply(ctx context.Context, args map[string]any) (any, error) {
 	// Keep Caddy's admin API where this agent talks to it (a config without "admin" would reset it).
 	if _, has := cfg["admin"]; !has {
 		cfg["admin"] = map[string]any{"listen": adminListen(a.caddyAdmin)}
-	}
-	if wildcard != "" {
-		// DNS-01 policy uses {env.DO_AUTH_TOKEN}/{env.CF_API_TOKEN} (see dns.go); autosave is safe —
-		// the token is not embedded in the JSON config. Keep admin.listen if present.
 	}
 	b, _ := json.Marshal(cfg)
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -61,7 +57,7 @@ func (a *Manager) Apply(ctx context.Context, args map[string]any) (any, error) {
 	rb, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
 	if res.StatusCode != http.StatusOK {
 		msg := strings.TrimSpace(string(rb))
-		if wildcard != "" { // M2.9: Caddy can echo provider config in errors; never pass the DNS token on
+		if wildcard != "" { // Caddy can echo provider config in errors; never pass the DNS token on
 			if f, e := a.loadDNSToken(); e == nil && f.Token != "" {
 				msg = strings.ReplaceAll(msg, f.Token, "[redacted]")
 			}
@@ -78,7 +74,7 @@ func (a *Manager) Apply(ctx context.Context, args map[string]any) (any, error) {
 	return out, nil
 }
 
-// CertInstall writes a validated cert/key pair (e.g. the platform wildcard) to <cert-dir>; key 0600.
+// CertInstall writes a validated cert/key pair (e.g. a wildcard certificate) to <cert-dir>; key 0600.
 func (a *Manager) CertInstall(args map[string]any) (any, error) {
 	domain := strings.ToLower(util.Str(args, "domain"))
 	if !docker.DomainRe.MatchString(domain) {

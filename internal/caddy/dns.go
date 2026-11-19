@@ -1,6 +1,6 @@
 package caddy
 
-// M2.9: the server's wildcard certificate via DNS-01. The engine sends this server's DNS provider token over the
+// The server's wildcard certificate via DNS-01. The engine sends this server's DNS provider token over the
 // live connection ("dns_token": never queued, never logged); it is saved 0600 in the state dir and synced into
 // /etc/f2c-agent/caddy-dns.env (DO_AUTH_TOKEN / CF_API_TOKEN) so Caddy can reference {env.*} placeholders.
 // caddy_apply inserts a DNS-01 policy for *.<domain> that uses those placeholders (never embeds the token literal).

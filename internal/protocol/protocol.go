@@ -113,15 +113,15 @@ type Message struct {
 	ID          string         `json:"id"`
 	Type        string         `json:"type"`
 	Args        map[string]any `json:"args"`
-	// NotAfter: optional absolute RFC 3339 deadline on "cmd" envelopes (protocol 2b). A command that arrives more than
+	// NotAfter: optional absolute RFC 3339 deadline on "cmd" envelopes (docs/protocol.md 6.4). A command that arrives more than
 	// NotAfterSkew past it is refused unrun (result ok:false, code "expired"); missing = no deadline.
 	NotAfter string `json:"notAfter"`
 	// Token: only on "rotate_token" (sent over the live connection, never queued or logged).
 	Token string `json:"token"`
-	// Provider/Domain/Token: only on "dns_token" (M2.9; live connection only, token never logged).
+	// Provider/Domain/Token: only on "dns_token" (live connection only, token never logged).
 	Provider string `json:"provider"`
 	Domain   string `json:"domain"`
-	// Config: only on "registry_login" (step 9h docker config with 24 h read creds; never logged).
+	// Config: only on "registry_login" (docker config with 24 h read creds; never logged).
 	Config json.RawMessage `json:"config"`
 }
 

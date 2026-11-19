@@ -1,6 +1,6 @@
 package agent
 
-// App console (dashboard "Console"): an interactive shell in an app container, relayed by the engine.
+// App console: an interactive shell in an app container, relayed by the engine.
 // The exec runs through the Docker Engine API on the local unix socket with Tty: true, so dockerd allocates the PTY
 // (no pty dependency). Messages: engine -> console_open{id,container,cmd,cols,rows} | console_in{id,d(base64)} |
 // console_resize{id,cols,rows} | console_close{id}; agent -> console_ready{id} | console_out{id,d(base64)} |
