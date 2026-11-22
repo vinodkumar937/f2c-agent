@@ -72,6 +72,12 @@ Environment: `F2C_AGENT_STATE_DIR` (default state dir), `DOCKER_HOST` (a `unix:/
 of the `f2c-buildkit` container), `F2C_AGENT_SWEEP=0` (no hourly cleanup of stale image uploads and old `f2c/*` images), `F2C_AGENT_NPM_CI=0` (do not switch
 npm builds with a lockfile to `npm ci`).
 
+Manual host hardening: `deploy/harden.sh --dry-run --skip-agent-check` previews the changes before a join;
+`--apply --skip-agent-check` applies them. To restore a harden backup, run
+`deploy/harden.sh --rollback last` (or a backup id). Rollback skips the agent-active and agent-connected checks by
+default, so it also works while the agent is stopped; the file, firewall and SSH restore checks still run.
+Use `--rollback-agent-check` to opt back into the agent checks for rollback. Apply and dry run are unchanged.
+
 ## Verify a release
 
 Every release has `SHA256SUMS` (a signed `# ` header, then `sha256  file` lines), `SHA256SUMS.sigs` (JSON list of ed25519 signatures,
@@ -88,8 +94,8 @@ go run ./cmd/ed25519tool verify-b64 <public key base64> SHA256SUMS SHA256SUMS.si
 sha256sum --ignore-missing -c SHA256SUMS
 ```
 
-`release-key.pub` is a PEM file: `-----BEGIN PUBLIC KEY-----`, the `MCowBQYDK2Vw...` line from the key block of `deploy/install.sh` (one line
-per key), `-----END PUBLIC KEY-----`. A signature by a key that is not in the list, or by one marked `revoked`, must not be trusted.
+`release-key.pub` is a PEM file: `-----BEGIN PUBLIC KEY-----`, the `MCowBQYDK2Vw...` value from the key block of `deploy/install.sh` (one file
+per key; the value only, without the key id, the status or the closing `"`), `-----END PUBLIC KEY-----`. A signature by a key that is not in the list, or by one marked `revoked`, must not be trusted.
 
 Release key fingerprints (key id = first 8 bytes of the SHA-256 of the raw 32-byte public key, as 16 hex characters; the fingerprint is that full SHA-256):
 

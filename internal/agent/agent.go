@@ -30,7 +30,14 @@ import (
 	"github.com/vinodkumar937/f2c-agent/internal/version"
 )
 
-const heartbeatEvery = 15 * time.Second
+const (
+	heartbeatEvery = 15 * time.Second
+
+	// On a clean shutdown the agent sends close 1000 and waits this long for the
+	// engine's close reply before dropping the connection (CloseNow).
+	shutdownCloseWait   = 2 * time.Second
+	shutdownCloseReason = "agent stopping"
+)
 
 // doneEntry is a finished command's result, kept so a re-sent id is answered without running it again. At, Type and ArgsSha
 // are optional additions (journal.go); a file without them, and an older agent reading a file with them, both work.
@@ -279,6 +286,17 @@ func (a *Agent) session(ctx context.Context) (accepted bool, _ error) {
 
 	sctx, stop := context.WithCancel(ctx)
 	defer stop()
+	// Read must not use the run ctx: cancelling that ctx makes coder/websocket
+	// close the TCP connection without a close frame, which the engine logs as 1006.
+	rctx, stopRead := context.WithCancel(context.Background())
+	defer stopRead()
+	go func() {
+		select {
+		case <-ctx.Done():
+			closeOnShutdown(c, stopRead)
+		case <-rctx.Done():
+		}
+	}()
 	go func() {
 		a.heartbeat()
 		t := time.NewTicker(heartbeatEvery)
@@ -325,12 +343,13 @@ func (a *Agent) session(ctx context.Context) (accepted bool, _ error) {
 			dead.Store(true)
 			go func() { _ = c.Close(websocket.StatusGoingAway, "ping timeout") }()
 			stop()
+			stopRead() // unblock the reader; do not send 1000 (this is not a shutdown)
 			return
 		}
 	}()
 
 	for {
-		_, data, err := c.Read(sctx)
+		_, data, err := c.Read(rctx)
 		if err != nil {
 			if dead.Load() {
 				return accepted, errDeadLink
@@ -375,6 +394,30 @@ func (a *Agent) session(ctx context.Context) (accepted bool, _ error) {
 			a.mu.Unlock()
 		}
 		busy.Store(false)
+	}
+}
+
+// closeOnShutdown sends 1000 "agent stopping" and waits up to shutdownCloseWait
+// for the engine's close reply. coder/websocket.Close waits on the reader for
+// that reply, so the read loop is left running until the handshake finishes or
+// the wait expires; only then is the read ctx cancelled. CloseNow is the
+// fallback after the timeout (the read-ctx cancel is what actually aborts the
+// library's longer handshake wait, because Close has already marked the conn
+// closing). Used only on a parent-ctx shutdown, never on error or reconnect.
+func closeOnShutdown(c *websocket.Conn, stopRead context.CancelFunc) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = c.Close(websocket.StatusNormalClosure, shutdownCloseReason)
+	}()
+	t := time.NewTimer(shutdownCloseWait)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C:
+		stopRead()
+		_ = c.CloseNow()
+		<-done
 	}
 }
 

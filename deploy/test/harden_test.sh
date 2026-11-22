@@ -144,6 +144,42 @@ eq words-missing-none "" "$(words_missing "a" "a b")"
 # 9.1: our ignoreip = loopback + --allow-ip + open SSH sessions; nothing else (no engine IPs)
 eq ours-ignoreip "10.0.0.0/8 127.0.0.1/8 198.51.100.4 203.0.113.9 ::1" "$(f2b_our_ignoreip "203.0.113.9 198.51.100.4" 10.0.0.0/8 203.0.113.9)"
 eq ours-ignoreip-min "127.0.0.1/8 ::1" "$(f2b_our_ignoreip "")"
+# --- agent checks per mode: a rollback skips agent_active/agent_connected unless --rollback-agent-check ---
+eq agentcheck-apply 1 "$(effective_agent_check apply 1 0)"
+eq agentcheck-dryrun 1 "$(effective_agent_check dry-run 1 0)"
+eq agentcheck-apply-skip 0 "$(effective_agent_check apply 0 0)"
+eq agentcheck-apply-flag-ignored 1 "$(effective_agent_check apply 1 1)"
+eq agentcheck-rollback-default 0 "$(effective_agent_check rollback 1 0)"
+eq agentcheck-rollback-flag 1 "$(effective_agent_check rollback 1 1)"
+eq agentcheck-rollback-flag-skip 0 "$(effective_agent_check rollback 0 1)"
+# the CLI wiring, without root: harden.sh stops at "run as root" after the mode and the agent check are settled
+if [[ $(id -u) != 0 ]]; then
+  agentcheck_cli() { bash -x "$here/../harden.sh" "$@" 2>&1 | sed -n 's/^+ AGENT_CHECK=//p' | tail -1; }
+  eq agentcheck-cli-rollback 0 "$(agentcheck_cli --rollback last)"
+  eq agentcheck-cli-rollback-flag 1 "$(agentcheck_cli --rollback last --rollback-agent-check)"
+  eq agentcheck-cli-apply 1 "$(agentcheck_cli --apply)"
+  eq agentcheck-cli-apply-skip 0 "$(agentcheck_cli --apply --skip-agent-check)"
+fi
+# --- fail2ban ignoreip: compared by network, not text (fail2ban shows 127.0.0.1/8 as 127.0.0.0/8) ---
+eq norm-v4-hostbits "127.0.0.0/8" "$(f2b_norm "127.0.0.1/8" | sed 's/ $//')"
+eq norm-v4-same "127.0.0.0/8" "$(f2b_norm "127.0.0.0/8" | sed 's/ $//')"
+eq norm-v4-host32 "203.0.113.5" "$(f2b_norm "203.0.113.5/32" | sed 's/ $//')"
+eq norm-v4-bare "203.0.113.5" "$(f2b_norm "203.0.113.5" | sed 's/ $//')"
+eq norm-v4-odd-prefix "10.1.0.0/20" "$(f2b_norm "10.1.15.200/20" | sed 's/ $//')"
+eq norm-v4-zero "0.0.0.0/0" "$(f2b_norm "192.0.2.1/0" | sed 's/ $//')"
+eq norm-v6-loop128 "::1" "$(f2b_norm "::1/128" | sed 's/ $//')"
+eq norm-v6-loop "::1" "$(f2b_norm "::1" | sed 's/ $//')"
+eq norm-v6-long "::1" "$(f2b_norm "0:0:0:0:0:0:0:1" | sed 's/ $//')"
+eq norm-v6-case "2001:db8::/32" "$(f2b_norm "2001:DB8:0:0:0:0:0:1/32" | sed 's/ $//')"
+eq norm-v6-hostbits "2001:db8:abcd:1200::/56" "$(f2b_norm "2001:db8:abcd:12ff::1/56" | sed 's/ $//')"
+eq norm-v6-leading0 "2001:db8::1:0:0:1" "$(f2b_norm "2001:0db8:0000:0000:0001:0000:0000:0001" | sed 's/ $//')"
+eq norm-v6-mapped "::ffff:c000:201" "$(f2b_norm "::ffff:192.0.2.1" | sed 's/ $//')"
+eq norm-host "example.com" "$(f2b_norm "example.com" | sed 's/ $//')"
+eq norm-bad-kept "300.1.1.1 fe80::1%eth0" "$(f2b_norm "300.1.1.1 fe80::1%eth0" | sed 's/ $//')"
+eq norm-list "127.0.0.0/8 203.0.113.5 ::1" "$(f2b_norm "::1/128 127.0.0.1/8 203.0.113.5/32 127.0.0.0/8" | sed 's/ $//')"
+# the harden check: what we configured vs what fail2ban-client shows (the false warning seen on Ubuntu 24.04)
+eq norm-live-match "" "$(words_missing "$(f2b_norm "198.51.100.4 127.0.0.1/8 ::1")" "$(f2b_norm "$(parse_f2b_get_ignoreip <<< "$GET" | tr '\n' ' ') 198.51.100.4")")"
+eq norm-live-miss "198.51.100.7" "$(words_missing "$(f2b_norm "198.51.100.7 127.0.0.1/8")" "$(f2b_norm "127.0.0.0/8 ::1")")"
 eq json-str '"a\"b\\c\n"' "$(json_str $'a"b\\c\n')"
 
 rm -rf -- "$tmp"

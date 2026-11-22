@@ -172,8 +172,10 @@ is unchanged. Nothing new is sent in any JSON frame.
 
 | Code | Sent by | Meaning | Agent behaviour |
 |---|---|---|---|
+| `1000` | Agent | `"agent stopping"`: a clean shutdown. The agent sends this close and waits up to 2 s for the engine's close reply before dropping the connection (next release). | The process is exiting; it does not reconnect. |
 | `1001` | Agent | `"ping timeout"`: the dead-link check got no pong (since agent 0.4.0). | Reconnect on the normal schedule. |
 | `1003` | Engine | Binary frame received. | Reconnect on the normal schedule. |
+| `1006` | — | The connection ended without a close frame. After the next release a clean agent shutdown uses `1000` instead, so `1006` means an abnormal end. | Reconnect on the normal schedule if the process is still running. |
 | `1009` | Engine | Message larger than 16 MiB. | Reconnect on the normal schedule. |
 | `4000` | Engine | Replaced by a newer connection for the same server. | Wait a random **30 to 90 s**, then reconnect; the log says another agent may be using this token (since agent 0.4.0; see [7.1](#71-backoff-and-retry-schedules)). |
 | `4001` | Engine | Idle for more than 60 s. | Reconnect on the normal schedule. |
@@ -181,6 +183,8 @@ is unchanged. Nothing new is sent in any JSON frame.
 | `4003` | Engine | Server revoked, or its token rotated away. | Reconnect on the slow **auth schedule**; the agent never stops by itself (since agent 0.4.0; see [7.1](#71-backoff-and-retry-schedules)). |
 
 Any other close or read error is logged and followed by a reconnect on the normal schedule. The engine never sends `403`; the agent treats it like `401` in case a proxy does.
+
+On a clean shutdown (next release) the agent sends `1000 "agent stopping"` and waits up to 2 s for the engine's close reply before dropping the connection. `1006` then means an abnormal end.
 
 ## 3. Versioning and negotiation
 
@@ -774,7 +778,7 @@ A deliberate rollback (the engine's `rollback` path, [8.3](#83-what-an-engine-pi
 #### 4.9.21 `harden`
 
 `{runId, mode, allowIps?, swapGb?, sshKeysOnly?, backupId?}` is the optional "Harden server" feature. `runId` is `harden-` plus 1 to 40 of `[a-z0-9]`; `mode` is `dry_run`, `apply` or `rollback` (`backupId` is `last` or `YYYYMMDD-HHMMSS`, for rollback). `allowIps` has at most 16 IPs or CIDRs, `swapGb` is 0 to 16 (default 2), `sshKeysOnly` defaults to true.
-The agent writes a request file; a root `f2c-harden.path` unit starts `f2c-harden.service` (`harden.sh`), which writes a result file that the agent returns. Before and after its steps, `harden.sh` checks the `harden/link-proof` file written by the agent's link monitor ([2.6](#26-keepalive-and-liveness)).
+The agent writes a request file; a root `f2c-harden.path` unit starts `f2c-harden.service` (`harden.sh`), which writes a result file that the agent returns. Apply and dry run check the `harden/link-proof` file written by the agent's link monitor ([2.6](#26-keepalive-and-liveness)) before and after their steps. Rollback skips the agent-active and agent-connected checks by default, so restoring a backup does not depend on a running agent; it still verifies restored files, firewall state and SSH. Manual CLI use can opt back into the agent checks with `--rollback-agent-check` (not a protocol field).
 
 - **Exactly once per `runId`.** The agent records each run in `<state-dir>/harden/runs.json` (up to 200). A repeated `runId` is never run again; the agent returns the recorded or fresh outcome with `data.replayed: true` ([6.3](#63-duplicate-ids-and-replay)).
 - **Failure shapes.** Failures before the run starts are `ok:false` with a `harden_*` code at every protocol ([section 5](#5-error-codes-and-retry-semantics)). Failures the agent detects while following the run (`harden_running:`, `harden_not_triggered:`, `harden_script_failed:` or an unknown outcome) depend on the session: at **protocol 0** they come back as `ok:true` with `data.status: "failed"`, a `data.message` with that prefix and **no `code`**; at **protocol >= 1** they are `ok:false` with the same message as `error`, **no `data`**, and a code (`conflict`, `harden_failed`, `harden_script_failed`; [5.1](#51-resultcode)). What the **script** reports (`failed`, `rolled_back`) is `ok:true` with the full audit at every protocol, and so is the replay of a recorded result.

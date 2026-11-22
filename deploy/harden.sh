@@ -10,6 +10,8 @@
 # Options: --allow-ip IP|CIDR (repeatable, max 16: SSH allow above the rate limit + fail2ban ignoreip)
 #          --engine URL (engine reachability pre/post-check only)   --swap-gb N (0-16, default 2)
 #          --no-ssh-keys-only (keep SSH password login)   --skip-agent-check (manual use before the agent joins)
+#          --rollback-agent-check (rollback only: also run the agent-active/connected checks; off by default, so a
+#            rollback with the agent stopped is judged by its own restore check)
 #          --id RUN_ID   --result-dir DIR (also write <RUN_ID>.json + last.json there)
 #
 # Steps (JSON ids): unattended_upgrades, fail2ban, ssh_keys_only, ssh_rate_limit, sysctl, swap, time_sync, journald.
@@ -66,7 +68,7 @@ JOURNALD_FILE=/etc/systemd/journald.conf.d/00-f2c-harden.conf
 SWAPFILE=/swapfile
 STEP_IDS=(unattended_upgrades fail2ban ssh_keys_only ssh_rate_limit sysctl swap time_sync journald)
 
-MODE="" RUN_ID="" ENGINE="" SWAP_GB=2 SSH_KEYS_ONLY=1 AGENT_CHECK=1 BACKUP_ID="" REQUEST="" RESULT_DIR=""
+MODE="" RUN_ID="" ENGINE="" SWAP_GB=2 SSH_KEYS_ONLY=1 AGENT_CHECK=1 ROLLBACK_AGENT_CHECK=0 BACKUP_ID="" REQUEST="" RESULT_DIR=""
 ALLOW_IPS=()
 
 die_usage() { echo "harden.sh: $*" >&2; EARLY_MSG="harden_bad_request: $*"; exit 2; }
@@ -336,6 +338,84 @@ f2b_dropin_content() {
   [[ $unset != *" bantime "* ]] || echo "bantime = 1h"
 }
 
+# effective_agent_check MODE AGENT_CHECK ROLLBACK_AGENT_CHECK: 1 when run_checks should include agent_active and
+# agent_connected. Apply and dry run keep AGENT_CHECK (--skip-agent-check turns it off). A rollback skips them unless
+# --rollback-agent-check is given: it is judged by rollback_verified, and the agent is often stopped on purpose.
+effective_agent_check() {
+  if [[ $2 != 1 ]]; then echo 0
+  elif [[ $1 == rollback && $3 != 1 ]]; then echo 0
+  else echo 1; fi
+}
+# f2b_norm "ADDR…": canonical, sorted, de-duplicated form of fail2ban ignoreip entries, so the configured and the live
+# list compare by network, not by text. IPv4/IPv6 with a prefix: host bits cleared (127.0.0.1/8 = 127.0.0.0/8); a full
+# prefix (/32, /128) is dropped (::1/128 = ::1); IPv6 is lower case, RFC 5952 compressed (0:0:0:0:0:0:0:1 = ::1),
+# IPv4-mapped tails converted. Anything else (host names, odd forms) is kept as written. POSIX awk (mawk/gawk/BSD).
+f2b_norm() {
+  tr ' \t' '\n\n' <<< "$1" | awk '
+    function p2(n,  r) { r = 1; while (n-- > 0) r *= 2; return r }
+    function hex2dec(h,  i, c, v) { v = 0; h = tolower(h); for (i = 1; i <= length(h); i++) { c = index("0123456789abcdef", substr(h, i, 1)); if (!c) return -1; v = v * 16 + c - 1 } return v }
+    function dec2hex(v,  s) { if (v == 0) return "0"; s = ""; while (v > 0) { s = substr("0123456789abcdef", v % 16 + 1, 1) s; v = int(v / 16) } return s }
+    function v4(a, pfx,  o, n, i, keep, out) {
+      n = split(a, o, "."); if (n != 4) return ""
+      for (i = 1; i <= 4; i++) if (o[i] !~ /^[0-9]+$/ || o[i] + 0 > 255) return ""
+      if (pfx == "") pfx = 32
+      out = ""
+      for (i = 1; i <= 4; i++) {
+        keep = pfx - (i - 1) * 8; if (keep > 8) keep = 8; if (keep < 0) keep = 0
+        o[i] += 0; o[i] -= o[i] % p2(8 - keep)
+        out = out (i > 1 ? "." : "") o[i]
+      }
+      return out (pfx == 32 ? "" : "/" pfx)
+    }
+    function v6(a, pfx,  h, n, i, j, head, tail, nh, nt, g, t4, d, keep, bs, bl, cs, cl, out) {
+      a = tolower(a)
+      if (a ~ /[^0-9a-f:.]/ || a ~ /:::/) return ""
+      if (index(a, ".")) { # IPv4-mapped / embedded tail
+        i = match(a, /[0-9.]+$/); if (!i) return ""
+        t4 = v4(substr(a, i), ""); if (t4 == "" || index(t4, "/")) return ""
+        split(t4, d, ".")
+        a = substr(a, 1, i - 1) dec2hex(d[1] * 256 + d[2]) ":" dec2hex(d[3] * 256 + d[4])
+      }
+      i = index(a, "::")
+      if (i) {
+        head = substr(a, 1, i - 1); tail = substr(a, i + 2)
+        if (index(tail, "::")) return ""
+        nh = head == "" ? 0 : split(head, h, ":"); nt = tail == "" ? 0 : split(tail, d, ":")
+        if (nh + nt > 7) return ""
+        for (j = 1; j <= nt; j++) h[8 - nt + j] = d[j]
+        for (j = nh + 1; j <= 8 - nt; j++) h[j] = "0"
+      } else if (split(a, h, ":") != 8) return ""
+      if (pfx == "") pfx = 128
+      for (j = 1; j <= 8; j++) {
+        if (h[j] == "" || length(h[j]) > 4) return ""
+        g[j] = hex2dec(h[j]); if (g[j] < 0) return ""
+        keep = pfx - (j - 1) * 16; if (keep > 16) keep = 16; if (keep < 0) keep = 0
+        g[j] -= g[j] % p2(16 - keep)
+      }
+      bs = 0; bl = 0; cs = 0; cl = 0 # longest run of zero groups (>= 2) becomes "::", the first one on a tie
+      for (j = 1; j <= 9; j++) {
+        if (j <= 8 && g[j] == 0) { if (!cl) cs = j; cl++ }
+        else { if (cl > bl && cl >= 2) { bs = cs; bl = cl } cl = 0 }
+      }
+      out = ""
+      for (j = 1; j <= 8; j++) {
+        if (bl && j == bs) { out = out "::"; j += bl - 1; continue }
+        out = out ((out != "" && out !~ /:$/) ? ":" : "") dec2hex(g[j])
+      }
+      return out (pfx == 128 ? "" : "/" pfx)
+    }
+    function norm(e,  a, pfx, i, r) {
+      a = e; pfx = ""
+      i = index(e, "/")
+      if (i) { a = substr(e, 1, i - 1); pfx = substr(e, i + 1); if (pfx !~ /^[0-9]+$/) return e; pfx += 0 }
+      if (a ~ /^[0-9.]+$/) { if (pfx != "" && pfx > 32) return e; r = v4(a, pfx) }
+      else if (index(a, ":")) { if (pfx != "" && pfx > 128) return e; r = v6(a, pfx) }
+      else return e
+      return r == "" ? e : r
+    }
+    NF { print norm($1) }' | sort -u | tr '\n' ' '
+}
+
 # shellcheck disable=SC2317 # exit is reached when the file is executed instead of sourced
 [[ ${F2C_HARDEN_LIB:-} == 1 ]] && { return 0 2>/dev/null || exit 0; }
 
@@ -417,16 +497,18 @@ while (($#)); do
     --swap-gb) valid_swap "${2:-}" || die_usage "--swap-gb must be 0-16"; SWAP_GB=$((10#$2)); shift 2 ;;
     --no-ssh-keys-only) SSH_KEYS_ONLY=0; shift ;;
     --skip-agent-check) AGENT_CHECK=0; shift ;;
+    --rollback-agent-check) ROLLBACK_AGENT_CHECK=1; shift ;;
     --id) valid_run_id "${2:-}" || die_usage "bad --id"; RUN_ID=$2; shift 2 ;;
     --request) REQUEST=${2:-}; shift 2 ;;
     --result-dir) RESULT_DIR=${2:-}; shift 2 ;;
-    -h | --help) DONE=1; sed -n '2,13p' "$0"; exit 0 ;;
+    -h | --help) DONE=1; sed -n '2,15p' "$0"; exit 0 ;;
     *) die_usage "unknown argument $1" ;;
   esac
 done
 [[ -n $REQUEST ]] && read_request "$REQUEST"
 [[ -n $MODE ]] || die_usage "pick one of --dry-run, --apply, --rollback (nothing runs by default)"
 [[ $MODE == rollback ]] && BACKUP_ID=${BACKUP_ID:-last}
+AGENT_CHECK=$(effective_agent_check "$MODE" "$AGENT_CHECK" "$ROLLBACK_AGENT_CHECK")
 [[ -n $BACKUP_ID ]] && { valid_backup_id "$BACKUP_ID" || die_usage "bad backup id"; }
 [[ -n $RUN_ID || $MODE == stop-post ]] || RUN_ID="harden-cli-$(date -u +%Y%m%d%H%M%S)"
 [[ $(id -u) == 0 ]] || die_usage "run as root"
@@ -693,7 +775,6 @@ f2b_validate() {
   rm -rf -- "$tmp"
   [[ -n $got && -z $(words_missing "$2" "$got") ]]
 }
-f2b_norm() { tr ' ' '\n' <<< "$1" | sed -E 's#/(32|128)$##' | awk 'NF' | sort -u | tr '\n' ' '; }
 step_fail2ban() {
   local id=fail2ban ours ports before="" want content mode unset="" k f r changed=0 was_active=0 installed=0 tmp live miss kept
   ours=$(f2b_our_ignoreip "$PEER_IPS" "${ALLOW_IPS[@]+"${ALLOW_IPS[@]}"}")
